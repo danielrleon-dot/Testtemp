@@ -4,75 +4,117 @@ This file provides context and guidance for AI assistants (such as Claude) worki
 
 ## Repository Overview
 
-**Name:** Testtemp
-**Status:** New / minimal repository — no application code exists yet.
+**Name:** StarForge — Space Shooter RPG
+**Language:** Python 3
+**Dependency:** pygame 2.x
 
-The repository currently contains only a placeholder README. This CLAUDE.md will be updated as the project evolves.
+A top-down vertical-scrolling space shooter with RPG-style progression.
+The player's spaceship fights through waves of enemies, gains XP, levels up,
+and chooses upgrades that permanently change how the ship plays.
 
-## Current Repository Structure
+## Project Structure
 
 ```
 Testtemp/
-├── .git/          # Git metadata
-├── README.md      # Project title placeholder
+├── main.py        # Entry point, Game class, game-state machine
+├── entities.py    # Player, Enemy, Bullet, EnemyBullet sprites
+├── hud.py         # HUD, StarField, UpgradeScreen, GameOverScreen
+├── constants.py   # All tunable values: screen size, colors, stats, upgrades
+├── README.md
 └── CLAUDE.md      # This file
 ```
 
-## Git Workflow
-
-### Branches
-
-- `master` — primary integration branch
-- `claude/<description>` — branches used by AI assistants for scoped work
-
-### Commit Conventions
-
-Use clear, descriptive commit messages in the imperative mood:
-
-```
-Add user authentication module
-Fix null pointer in data parser
-Update README with setup instructions
-```
-
-### Push Instructions
-
-Always push with upstream tracking set:
-
-```bash
-git push -u origin <branch-name>
-```
-
-Branch names for AI-assisted work must follow the pattern:
-`claude/<description>-<session-id>`
-
 ## Development Setup
 
-No build system, package manager, or runtime dependencies exist yet. When they are added, update this file with:
+```bash
+pip install pygame
+python main.py
+```
 
-- Installation steps (`npm install`, `pip install -r requirements.txt`, etc.)
-- How to run the project locally
-- Environment variable requirements (`.env.example` contents)
+No virtual environment is required, but one is recommended on shared machines.
 
-## Testing
+## Controls
 
-No test framework is configured yet. When tests are added, document here:
+| Key(s)            | Action           |
+|-------------------|------------------|
+| WASD / Arrow keys | Move spaceship   |
+| Space / Z         | Shoot            |
+| 1 / 2 / 3         | Pick upgrade     |
+| Up / Down         | Navigate upgrade |
+| Enter / Space     | Confirm upgrade  |
+| R                 | Restart (game over) |
+| Q                 | Quit (game over) |
 
-- How to run the full test suite
-- How to run a single test file
-- Coverage requirements or thresholds
+## Architecture
 
-## Linting / Formatting
+### State machine (main.py)
+`Game.state` is one of `STATE_PLAYING`, `STATE_UPGRADE`, `STATE_GAMEOVER`.
+Transitions:
+- `PLAYING` → `UPGRADE` when `player.pending_levelups > 0`
+- `UPGRADE` → `PLAYING` (or next `UPGRADE`) when the player picks
+- `PLAYING` → `GAMEOVER` when `player.hp <= 0`
+- `GAMEOVER` → `PLAYING` on `R` (full reset via `_reset()`)
 
-No linter or formatter is configured yet. When one is added, document the command to run it (e.g., `eslint .`, `black .`, `golangci-lint run`).
+### Wave system
+`make_wave(wave_num)` returns a list of `(tier, x, delay)` tuples.
+Enemies are spawned on a timer inside `_spawn_pending`. Every 5th wave is a
+"boss wave" that greatly increases Boss-tier spawns. The wave advances
+automatically 2 s after all enemies are cleared.
+
+### Entities (entities.py)
+- **Player** — tracks stats (`hp`, `speed`, `shoot_rate`, `bullet_dmg`),
+  upgrade flags (`spread`, `piercing`, `has_shield`), score, XP, and level.
+  `apply_upgrade(id)` mutates stats in-place.
+- **Enemy** — four tiers (Scout, Fighter, Cruiser, Boss) defined in
+  `ENEMY_TIERS`. Moves downward with sinusoidal x-drift. Draws its own
+  health bar via `draw_healthbar`.
+- **Bullet / EnemyBullet** — simple velocity sprites; `piercing=True` skips
+  self-kill on hit.
+
+### RPG Upgrades (constants.py `UPGRADES`)
+Each entry has `id`, `label`, `desc`, `color`.
+`pick_upgrade_choices` filters already-obtained one-time upgrades and samples
+3 random options. Adding a new upgrade only requires adding an entry here and
+a matching branch in `Player.apply_upgrade`.
+
+### HUD (hud.py)
+- **HUD** — HP bar, XP bar, score, active upgrade tags.
+- **StarField** — parallax star background.
+- **UpgradeScreen** — semi-transparent overlay, 3 upgrade cards.
+- **GameOverScreen** — final stats.
 
 ## Key Conventions for AI Assistants
 
 - **Read before modifying.** Always read a file before editing it.
-- **Minimal changes.** Only change what is necessary for the task at hand; avoid refactoring unrelated code.
-- **No speculative features.** Do not add error handling, abstractions, or flexibility beyond what the current task requires.
-- **No commented-out code.** Delete unused code rather than commenting it out.
-- **No new files without clear need.** Prefer editing existing files; only create new files when the task explicitly requires it.
-- **No documentation files unless asked.** Do not create additional `.md` files or docstrings unless explicitly requested.
-- **Commit and push when done.** After completing an implementation task, commit with a descriptive message and push to the designated branch.
-- **Update this file** when the project structure, dependencies, or workflows change significantly.
+- **Minimal changes.** Only change what is necessary for the task at hand.
+- **constants.py is the single source of truth** for all numeric tuning values.
+  Do not hardcode magic numbers in entity or game logic files.
+- **New upgrade type?** Add entry to `UPGRADES` in `constants.py` and a branch
+  in `Player.apply_upgrade` in `entities.py`. Nothing else needs to change.
+- **New enemy tier?** Append to `ENEMY_TIERS` and update `make_wave` weights.
+- **No commented-out code.** Delete unused code.
+- **No new files without clear need.** Prefer editing existing files.
+- **Commit and push when done.** Use descriptive imperative-mood messages.
+
+## Testing
+
+No automated test framework. Use the headless smoke test pattern:
+
+```bash
+python3 -c "
+import os; os.environ['SDL_VIDEODRIVER']='dummy'; os.environ['SDL_AUDIODRIVER']='dummy'
+import pygame; pygame.init(); pygame.display.set_mode((600,800))
+from entities import Player, Enemy
+p = Player(); p.gain_xp(500); assert p.level > 1
+print('OK')
+"
+```
+
+## Git Workflow
+
+- `master` — primary integration branch
+- `claude/<description>-<session-id>` — AI-assisted work branches
+
+```bash
+git push -u origin <branch-name>
+```

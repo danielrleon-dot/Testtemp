@@ -42,6 +42,17 @@ swift run
 
 See `RULES.md` for the full, precise ruleset.
 
+## Seeds and undo/redo
+
+- Every deal is shuffled from a **seed** (a plain number), shown next to
+  "Seed:" in the toolbar. Note it down to come back to the same deal
+  later — paste it into the "Replay a seed" field and press **Play Seed**.
+  "New Game" always picks a fresh random seed.
+- **Undo** / **Redo** step back and forward through the game one move at a
+  time (a manual placement plus whatever auto-moves followed from it
+  counts as one move). Both can be pressed repeatedly. Undo history is
+  cleared by starting a new game (new or replayed seed).
+
 ## Project layout
 
 ```
@@ -51,7 +62,8 @@ Sources/FortunesFoundation/
     Colour.swift, ColourRank.swift, Card.swift   card model
     PileLocation.swift          identifies each pile/slot
     Deck.swift                  deck construction/shuffle
-    GameState.swift             game state, move + auto-move rules
+    SeededGenerator.swift       deterministic RNG for reproducible deals
+    GameState.swift             game state, move/auto-move rules, undo/redo
   Views/
     ContentView.swift           top-level layout
     CardView.swift               single card rendering

@@ -2,6 +2,7 @@ import SwiftUI
 
 struct ContentView: View {
     @StateObject private var game = GameState()
+    @State private var seedInput: String = ""
 
     var body: some View {
         ZStack {
@@ -35,20 +36,51 @@ struct ContentView: View {
     }
 
     private var header: some View {
-        HStack {
-            Text("Solitaire")
-                .font(.system(size: 22, weight: .bold, design: .rounded))
-                .foregroundColor(.white)
-            Spacer()
-            Text("Moves: \(game.moveCount)")
-                .foregroundColor(.white.opacity(0.7))
-            Toggle("Drag whole column", isOn: $game.moveWholeColumn)
-                .toggleStyle(.checkbox)
-                .foregroundColor(.white.opacity(0.85))
-            Button("New Game") { game.newGame() }
-                .buttonStyle(.borderedProminent)
+        VStack(spacing: 8) {
+            HStack {
+                Text("Solitaire")
+                    .font(.system(size: 22, weight: .bold, design: .rounded))
+                    .foregroundColor(.white)
+                Spacer()
+                seedControls
+                Button("New Game") { game.newGame() }
+                    .buttonStyle(.borderedProminent)
+            }
+
+            HStack {
+                Text("Moves: \(game.moveCount)")
+                    .foregroundColor(.white.opacity(0.7))
+                Button("Undo") { game.undo() }
+                    .disabled(!game.canUndo)
+                Button("Redo") { game.redo() }
+                    .disabled(!game.canRedo)
+                Spacer()
+                Toggle("Drag whole column", isOn: $game.moveWholeColumn)
+                    .toggleStyle(.checkbox)
+                    .foregroundColor(.white.opacity(0.85))
+            }
         }
         .padding(.horizontal, 24)
+    }
+
+    private var seedControls: some View {
+        HStack(spacing: 6) {
+            Text("Seed:")
+                .foregroundColor(.white.opacity(0.6))
+            Text("\(game.currentSeed)")
+                .font(.system(.body, design: .monospaced))
+                .foregroundColor(.white.opacity(0.85))
+                .textSelection(.enabled)
+
+            TextField("Replay a seed", text: $seedInput)
+                .textFieldStyle(.roundedBorder)
+                .frame(width: 150)
+            Button("Play Seed") {
+                guard let value = UInt64(seedInput.trimmingCharacters(in: .whitespaces)) else { return }
+                game.newGame(seed: value)
+            }
+            .disabled(UInt64(seedInput.trimmingCharacters(in: .whitespaces)) == nil)
+        }
     }
 
     private var foundationRow: some View {

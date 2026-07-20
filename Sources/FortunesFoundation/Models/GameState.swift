@@ -24,15 +24,36 @@ final class GameState: ObservableObject {
     @Published var moveCount: Int = 0
     @Published var isWon: Bool = false
 
+    /// The seed the current deal was shuffled from. Displayed to the
+    /// player so they can note it down and replay the same deal later via
+    /// newGame(seed:).
+    @Published private(set) var currentSeed: UInt64 = 0
+
     /// Player-facing option: when true, dropping the dragged card onto a
     /// tableau column also pulls along the rest of the matching run behind
     /// it (inverted); when false, dragging always moves that one card
     /// alone. Not reset by newGame() — it's a play-style preference.
     @Published var moveWholeColumn: Bool = false
 
+    @Published private var undoStack: [GameSnapshot] = []
+    @Published private var redoStack: [GameSnapshot] = []
+    var canUndo: Bool { !undoStack.isEmpty }
+    var canRedo: Bool { !redoStack.isEmpty }
+
     struct DragState {
         let source: PileLocation
         let cards: [Card]
+    }
+
+    /// A full copy of everything undo/redo needs to restore. moveCount is
+    /// included so it rewinds/replays in lockstep with the board.
+    private struct GameSnapshot {
+        let tableau: [[Card]]
+        let reserve: Card?
+        let bottomTrump: [Card]
+        let topTrump: [Card]
+        let colourFoundations: [Colour: [Card]]
+        let moveCount: Int
     }
 
     static let columnCount = 11
@@ -44,8 +65,13 @@ final class GameState: ObservableObject {
 
     // MARK: - Setup
 
-    func newGame() {
-        var deck = Deck.fullShuffledDeck()
+    /// Starts a new deal. Pass a seed to reproduce a specific deal later;
+    /// omit it for a fresh random one. The seed used is always published
+    /// via `currentSeed` so the player can note it down either way.
+    func newGame(seed: UInt64? = nil) {
+        let usedSeed = seed ?? UInt64.random(in: UInt64.min...UInt64.max)
+        currentSeed = usedSeed
+        var deck = Deck.fullShuffledDeck(seed: usedSeed)
         tableau = Array(repeating: [], count: Self.columnCount)
         for col in 0..<Self.columnCount where col != Self.middleColumn {
             for _ in 0..<7 {
@@ -62,7 +88,50 @@ final class GameState: ObservableObject {
         dragPoint = nil
         moveCount = 0
         isWon = false
+        undoStack = []
+        redoStack = []
         runFullAutoMoves()
+    }
+
+    // MARK: - Undo / redo
+
+    private func currentSnapshot() -> GameSnapshot {
+        GameSnapshot(
+            tableau: tableau,
+            reserve: reserve,
+            bottomTrump: bottomTrump,
+            topTrump: topTrump,
+            colourFoundations: colourFoundations,
+            moveCount: moveCount
+        )
+    }
+
+    private func restore(_ snapshot: GameSnapshot) {
+        tableau = snapshot.tableau
+        reserve = snapshot.reserve
+        bottomTrump = snapshot.bottomTrump
+        topTrump = snapshot.topTrump
+        colourFoundations = snapshot.colourFoundations
+        moveCount = snapshot.moveCount
+        checkWin()
+    }
+
+    /// Undoes the last completed move (a manual placement plus whatever
+    /// auto-moves followed from it, as one unit). Can be pressed
+    /// repeatedly to step back through the whole game. Ignored mid-drag.
+    func undo() {
+        guard dragging == nil, let previous = undoStack.popLast() else { return }
+        redoStack.append(currentSnapshot())
+        restore(previous)
+    }
+
+    /// Re-applies a move previously undone. Ignored mid-drag, or once
+    /// there's nothing left to redo (including after any new move, which
+    /// clears the redo history).
+    func redo() {
+        guard dragging == nil, let next = redoStack.popLast() else { return }
+        undoStack.append(currentSnapshot())
+        restore(next)
     }
 
     // MARK: - Drag lifecycle
@@ -102,6 +171,8 @@ final class GameState: ObservableObject {
 
         let target = targetFrames.first { $0.value.contains(point) }?.key
         if let target, target != drag.source, canPlace(cards: drag.cards, on: target) {
+            undoStack.append(currentSnapshot())
+            redoStack.removeAll()
             let group = fullPlacementGroup(for: drag, droppingOn: target)
             removeFromSource(group, source: drag.source)
             place(cards: group, on: target)
@@ -263,8 +334,6 @@ final class GameState: ObservableObject {
 
     private func checkWin() {
         let total = bottomTrump.count + topTrump.count + colourFoundations.values.reduce(0) { $0 + $1.count }
-        if total == 70 {
-            isWon = true
-        }
+        isWon = total == 70
     }
 }

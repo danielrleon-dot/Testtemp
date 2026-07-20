@@ -46,6 +46,17 @@ Key shape of the ruleset (see RULES.md for the authoritative version):
   the **"drag whole column"** checkbox (`GameState.moveWholeColumn`,
   default off) turned on. With it off, every drag moves a single card.
 
+Two things that aren't gameplay rules but are core to how the app works:
+- Every deal is shuffled deterministically from a `UInt64` seed
+  (`SeededGenerator`, SplitMix64), shown in the toolbar so the player can
+  replay a specific deal via `newGame(seed:)`.
+- Undo/redo is snapshot-based, not command-based: `GameState` pushes a
+  full copy of the board (`GameSnapshot`) onto `undoStack` right before
+  each successful `endDrag` placement, and `runFullAutoMoves()`'s
+  resulting cascade is *not* snapshotted separately — one Undo press
+  reverts a manual move and everything it auto-triggered as a single
+  unit. Any new move clears `redoStack`.
+
 ## Status / important caveat
 
 This code was originally written entirely in a cloud sandbox with **no
@@ -76,7 +87,8 @@ Sources/FortunesFoundation/
     Colour.swift, ColourRank.swift, Card.swift   card model
     PileLocation.swift          identifies each pile/slot
     Deck.swift                  deck construction/shuffle
-    GameState.swift             game state, move + auto-move rules
+    SeededGenerator.swift       deterministic RNG for reproducible deals
+    GameState.swift             game state, move/auto-move rules, undo/redo
   Views/
     ContentView.swift           top-level layout
     CardView.swift              single card rendering

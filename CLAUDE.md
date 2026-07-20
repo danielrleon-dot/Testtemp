@@ -57,6 +57,38 @@ Two things that aren't gameplay rules but are core to how the app works:
   reverts a manual move and everything it auto-triggered as a single
   unit. Any new move clears `redoStack`.
 
+## AI (SolitaireAI)
+
+A real (if intentionally simple) reinforcement-learning agent, added at
+the project owner's request. Since this game has no opponent and no
+hidden information once dealt, "learning" here is self-play TD(0) over a
+**linear** value function (`BoardEvaluator`) on hand-crafted features
+(`BoardFeatures`) — deliberately not a neural network, so it trains fast
+on-device with zero ML framework dependency and stays easy to reason
+about without a compiler to check it.
+
+- `GameState.legalMoves()` / `GameState.performMove(_:recordForUndo:)` /
+  `GameState.currentSnapshot()` / `GameState.restore(_:)` are the
+  non-private "headless" API surface the AI needs, alongside the existing
+  gesture-driven `beginDrag`/`endDrag` path used by human play — both
+  ultimately call the same private `canPlace`/`place`/`placementGroup`
+  helpers, so there's one source of truth for what's legal.
+- `SolitaireAI.train(episodes:)` runs self-play games on a background
+  `DispatchQueue`, each against its own disposable `GameState(seed:)` —
+  it never touches the player's live game. Weight updates happen on that
+  background queue too (the `evaluator` itself is plain, not
+  `@Published`, specifically so it's not touched from two threads via
+  Combine); only the summary `@Published` stats hop back to the main
+  thread when a training run finishes.
+- `SolitaireAI.suggestMove(for:)` runs synchronously on the caller's
+  thread (expected: main, via the "AI Move" button) and scores every
+  legal move by actually applying it to the passed-in live `GameState`,
+  reading the resulting value, then rolling it back via
+  snapshot/restore — so evaluation never leaves a trial move in place.
+- Expect modest performance, especially before much training — this is
+  meant as a working foundation to keep improving (better features, a
+  neural net, prioritized self-play, etc.), not a finished solver.
+
 ## Status / important caveat
 
 This code was originally written entirely in a cloud sandbox with **no
@@ -86,9 +118,13 @@ Sources/FortunesFoundation/
   Models/
     Colour.swift, ColourRank.swift, Card.swift   card model
     PileLocation.swift          identifies each pile/slot
+    Move.swift                  a candidate move (source/destination/run)
     Deck.swift                  deck construction/shuffle
     SeededGenerator.swift       deterministic RNG for reproducible deals
     GameState.swift             game state, move/auto-move rules, undo/redo
+    BoardFeatures.swift         hand-crafted features for the AI
+    BoardEvaluator.swift        linear value function + TD(0) update
+    SolitaireAI.swift           self-play training loop, move suggestion
   Views/
     ContentView.swift           top-level layout
     CardView.swift              single card rendering

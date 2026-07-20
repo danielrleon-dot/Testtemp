@@ -2,12 +2,14 @@ import SwiftUI
 
 struct ContentView: View {
     @StateObject private var game = GameState()
+    @StateObject private var ai = SolitaireAI()
     @State private var seedInput: String = ""
 
     var body: some View {
         ZStack {
             VStack(spacing: 20) {
                 header
+                aiPanel
                 foundationRow
                 tableauRow
                 Spacer()
@@ -118,6 +120,45 @@ struct ContentView: View {
         }
         .buttonStyle(.plain)
         .disabled(!enabled)
+    }
+
+    private var aiPanel: some View {
+        HStack(spacing: 12) {
+            Text("AI:")
+                .foregroundColor(.white.opacity(0.6))
+            Text(aiSummary)
+                .font(.system(.body, design: .monospaced))
+                .foregroundColor(.white.opacity(0.85))
+
+            Button {
+                ai.train(episodes: 200)
+            } label: {
+                if ai.isTraining {
+                    ProgressView()
+                        .controlSize(.small)
+                        .frame(width: 90)
+                } else {
+                    Text("Train 200 games")
+                }
+            }
+            .buttonStyle(.bordered)
+            .disabled(ai.isTraining)
+
+            historyButton(title: "AI Move", systemImage: "sparkles", color: .purple, enabled: !ai.isTraining && !game.isWon) {
+                if let move = ai.suggestMove(for: game) {
+                    game.performMove(move, recordForUndo: true)
+                }
+            }
+
+            Spacer()
+        }
+        .padding(.horizontal, 24)
+    }
+
+    private var aiSummary: String {
+        guard ai.gamesPlayed > 0 else { return "untrained" }
+        let winPercent = Int((Double(ai.gamesWon) / Double(ai.gamesPlayed) * 100).rounded())
+        return "\(ai.gamesWon)/\(ai.gamesPlayed) games won (\(winPercent)%)"
     }
 
     private var foundationRow: some View {

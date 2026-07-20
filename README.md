@@ -53,6 +53,26 @@ See `RULES.md` for the full, precise ruleset.
   counts as one move). Both can be pressed repeatedly. Undo history is
   cleared by starting a new game (new or replayed seed).
 
+## AI
+
+The "AI" row has a self-play reinforcement-learning agent:
+
+- **Train 200 games** runs 200 games of the AI playing itself in the
+  background (separate, disposable boards — it never touches the game
+  you're currently playing), learning after every move via TD(0) — it's a
+  linear value function over a handful of board features (foundation
+  progress, empty columns, longest movable run, etc.), not a neural
+  network, so it trains fast without any ML framework dependency. Press
+  it repeatedly to keep training; learned weights persist across app
+  launches (`UserDefaults`), and the win-rate counter accumulates.
+- **AI Move** applies the AI's current best move to *your* game, once,
+  using whatever it's learned so far (no further training from this).
+- Expect **modest** results, especially before much training — this is a
+  genuine but simple learner, not a solver. It should trend toward better
+  foundation progress with more training, but a linear evaluator likely
+  won't reliably win full games. See `Models/SolitaireAI.swift` for the
+  self-play loop and `Models/BoardEvaluator.swift` for the learning rule.
+
 ## Project layout
 
 ```
@@ -61,9 +81,13 @@ Sources/FortunesFoundation/
   Models/
     Colour.swift, ColourRank.swift, Card.swift   card model
     PileLocation.swift          identifies each pile/slot
+    Move.swift                  a candidate move (source/destination/run)
     Deck.swift                  deck construction/shuffle
     SeededGenerator.swift       deterministic RNG for reproducible deals
     GameState.swift             game state, move/auto-move rules, undo/redo
+    BoardFeatures.swift         hand-crafted features for the AI
+    BoardEvaluator.swift        linear value function + TD(0) update
+    SolitaireAI.swift           self-play training loop, move suggestion
   Views/
     ContentView.swift           top-level layout
     CardView.swift               single card rendering

@@ -46,8 +46,10 @@ final class GameState: ObservableObject {
     }
 
     /// A full copy of everything undo/redo needs to restore. moveCount is
-    /// included so it rewinds/replays in lockstep with the board.
-    private struct GameSnapshot {
+    /// included so it rewinds/replays in lockstep with the board. Not
+    /// private: SolitaireAI also uses this to simulate-and-roll-back
+    /// candidate moves when picking the best one.
+    struct GameSnapshot {
         let tableau: [[Card]]
         let reserve: Card?
         let bottomTrump: [Card]
@@ -59,8 +61,10 @@ final class GameState: ObservableObject {
     static let columnCount = 11
     static let middleColumn = 5
 
-    init() {
-        newGame()
+    /// Pass a seed to deal directly to a reproducible game (e.g. for AI
+    /// self-play); omit it for a fresh random deal.
+    init(seed: UInt64? = nil) {
+        newGame(seed: seed)
     }
 
     // MARK: - Setup
@@ -95,7 +99,7 @@ final class GameState: ObservableObject {
 
     // MARK: - Undo / redo
 
-    private func currentSnapshot() -> GameSnapshot {
+    func currentSnapshot() -> GameSnapshot {
         GameSnapshot(
             tableau: tableau,
             reserve: reserve,
@@ -106,7 +110,7 @@ final class GameState: ObservableObject {
         )
     }
 
-    private func restore(_ snapshot: GameSnapshot) {
+    func restore(_ snapshot: GameSnapshot) {
         tableau = snapshot.tableau
         reserve = snapshot.reserve
         bottomTrump = snapshot.bottomTrump
@@ -190,17 +194,29 @@ final class GameState: ObservableObject {
     /// if the player has "drag whole column" enabled. The source column
     /// hasn't been touched yet, so this reads its current, untouched state.
     private func fullPlacementGroup(for drag: DragState, droppingOn target: PileLocation) -> [Card] {
-        guard moveWholeColumn, case .tableau(let col) = drag.source, case .tableau = target,
-              let apparent = tableau[col].last, apparent.id == drag.cards[0].id else {
-            return drag.cards
-        }
+        placementGroup(cards: drag.cards, from: drag.source, takeWholeRun: moveWholeColumn, to: target)
+    }
+
+    /// Shared by human drags (gated by moveWholeColumn) and AI moves
+    /// (which decide per-move via Move.takeWholeRun): the run of
+    /// consecutive-rank, same-colour-or-all-trump cards immediately behind
+    /// `apparent` in `column`, read without mutating anything.
+    private func matchingChain(endingAt apparent: Card, in column: [Card]) -> [Card] {
         var chain = [apparent]
-        var idx = tableau[col].count - 2
-        while idx >= 0, isConsecutivePair(tableau[col][idx], chain.first!), sameDragGroup(tableau[col][idx], chain.first!) {
-            chain.insert(tableau[col][idx], at: 0)
+        var idx = column.count - 2
+        while idx >= 0, isConsecutivePair(column[idx], chain.first!), sameDragGroup(column[idx], chain.first!) {
+            chain.insert(column[idx], at: 0)
             idx -= 1
         }
         return chain
+    }
+
+    private func placementGroup(cards: [Card], from source: PileLocation, takeWholeRun: Bool, to destination: PileLocation) -> [Card] {
+        guard takeWholeRun, case .tableau(let col) = source, case .tableau = destination,
+              let apparent = tableau[col].last, apparent.id == cards[0].id else {
+            return cards
+        }
+        return matchingChain(endingAt: apparent, in: tableau[col])
     }
 
     private func removeFromSource(_ cards: [Card], source: PileLocation) {
@@ -212,6 +228,76 @@ final class GameState: ObservableObject {
         default:
             break
         }
+    }
+
+    // MARK: - Headless moves (for AI self-play / auto-play)
+
+    private func candidateCards(for source: PileLocation) -> [Card]? {
+        switch source {
+        case .tableau(let col):
+            return tableau[col].last.map { [$0] }
+        case .reserve:
+            return reserve.map { [$0] }
+        default:
+            return nil
+        }
+    }
+
+    /// Every currently legal move: from each column's apparent card (or
+    /// the Reserve's card) to every destination it could validly land on.
+    /// Where a matching run sits behind the apparent card, both taking
+    /// just that card and taking the whole run are offered as separate
+    /// candidates. Doesn't touch game state — safe to call freely.
+    func legalMoves() -> [Move] {
+        var sources: [PileLocation] = tableau.indices.compactMap { tableau[$0].isEmpty ? nil : .tableau($0) }
+        if reserve != nil { sources.append(.reserve) }
+
+        var destinations: [PileLocation] = [.reserve, .bottomTrump, .topTrump]
+        destinations.append(contentsOf: Colour.allCases.map { .colourFoundation($0) })
+        destinations.append(contentsOf: (0..<Self.columnCount).map { .tableau($0) })
+
+        var moves: [Move] = []
+        for source in sources {
+            guard let cards = candidateCards(for: source) else { continue }
+            for destination in destinations where destination != source {
+                guard canPlace(cards: cards, on: destination) else { continue }
+                moves.append(Move(source: source, destination: destination, takeWholeRun: false))
+                if case .tableau(let col) = source, case .tableau = destination {
+                    let chain = matchingChain(endingAt: cards[0], in: tableau[col])
+                    if chain.count > 1 {
+                        moves.append(Move(source: source, destination: destination, takeWholeRun: true))
+                    }
+                }
+            }
+        }
+        return moves
+    }
+
+    /// Applies a move produced by legalMoves() without any gesture/drag
+    /// machinery. `recordForUndo` should be true for a move made in a
+    /// live, player-visible game (so Undo still works afterward), and
+    /// false for disposable AI self-play instances. Returns false (and
+    /// does nothing) if the move is no longer legal.
+    @discardableResult
+    func performMove(_ move: Move, recordForUndo: Bool) -> Bool {
+        guard let cards = candidateCards(for: move.source), move.destination != move.source,
+              canPlace(cards: cards, on: move.destination) else {
+            return false
+        }
+        if recordForUndo {
+            undoStack.append(currentSnapshot())
+            redoStack.removeAll()
+        }
+        let group = placementGroup(cards: cards, from: move.source, takeWholeRun: move.takeWholeRun, to: move.destination)
+        removeFromSource(group, source: move.source)
+        place(cards: group, on: move.destination)
+        moveCount += 1
+        runFullAutoMoves()
+        return true
+    }
+
+    var foundationCardCount: Int {
+        bottomTrump.count + topTrump.count + colourFoundations.values.reduce(0) { $0 + $1.count }
     }
 
     // MARK: - Drag validation
@@ -333,7 +419,6 @@ final class GameState: ObservableObject {
     }
 
     private func checkWin() {
-        let total = bottomTrump.count + topTrump.count + colourFoundations.values.reduce(0) { $0 + $1.count }
-        isWon = total == 70
+        isWon = foundationCardCount == 70
     }
 }

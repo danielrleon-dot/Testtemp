@@ -15,4 +15,14 @@ enum Colour: String, CaseIterable, Identifiable, Codable, Hashable {
         case .yellow: return "Y"
         }
     }
+
+    /// Classic French suit symbol used to represent this colour on cards.
+    var symbol: String {
+        switch self {
+        case .red: return "♥"
+        case .yellow: return "♦"
+        case .green: return "♣"
+        case .blue: return "♠"
+        }
+    }
 }

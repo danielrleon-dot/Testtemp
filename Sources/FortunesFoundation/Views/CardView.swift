@@ -15,6 +15,15 @@ struct CardView: View {
                 )
                 .shadow(radius: 1, y: 1)
 
+            // Large, faint watermark symbol — only visible on a fully-exposed
+            // card (buried tableau cards are covered before this shows).
+            Text(symbolText)
+                .font(.system(size: 42, weight: .bold))
+                .foregroundColor(accentColor.opacity(0.16))
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+                .padding(.trailing, 6)
+                .padding(.bottom, 2)
+
             // Left accent bar stays visible even in the thin sliver of a
             // buried tableau card, so colour/trump is readable at a glance.
             RoundedRectangle(cornerRadius: 3)
@@ -25,12 +34,11 @@ struct CardView: View {
 
             VStack(alignment: .leading, spacing: 0) {
                 Text(rankText)
-                    .font(.system(size: 22, weight: .heavy, design: .rounded))
+                    .font(.system(size: 20, weight: .heavy, design: .rounded))
                     .foregroundColor(labelColor)
-                Text(subLabel)
-                    .font(.system(size: 9, weight: .bold, design: .rounded))
-                    .tracking(0.5)
-                    .foregroundColor(labelColor.opacity(0.85))
+                Text(symbolText)
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundColor(labelColor)
             }
             .padding(.top, 5)
             .padding(.leading, 15)
@@ -45,11 +53,10 @@ struct CardView: View {
         }
     }
 
-    private var subLabel: String {
-        switch card.kind {
-        case .colour(let colour, _): return colour.label.uppercased()
-        case .trump: return "TRUMP"
-        }
+    /// Suit symbol for colour cards; a star stands in for trumps, which have no colour.
+    private var symbolText: String {
+        guard let colour = card.colour else { return "★" }
+        return colour.symbol
     }
 
     private var accentColor: Color {

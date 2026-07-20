@@ -51,21 +51,12 @@ struct ContentView: View {
                 Text("Moves: \(game.moveCount)")
                     .foregroundColor(.white.opacity(0.7))
 
-                Button {
+                historyButton(title: "Undo", systemImage: "arrow.uturn.backward", color: .orange, enabled: game.canUndo) {
                     game.undo()
-                } label: {
-                    Label("Undo", systemImage: "arrow.uturn.backward")
                 }
-                .buttonStyle(.bordered)
-                .disabled(!game.canUndo)
-
-                Button {
+                historyButton(title: "Redo", systemImage: "arrow.uturn.forward", color: .teal, enabled: game.canRedo) {
                     game.redo()
-                } label: {
-                    Label("Redo", systemImage: "arrow.uturn.forward")
                 }
-                .buttonStyle(.bordered)
-                .disabled(!game.canRedo)
 
                 Spacer()
                 Toggle("Drag whole column", isOn: $game.moveWholeColumn)
@@ -104,6 +95,29 @@ struct ContentView: View {
     private var parsedSeed: UInt64? {
         let cleaned = seedInput.filter { $0.isNumber }
         return cleaned.isEmpty ? nil : UInt64(cleaned)
+    }
+
+    /// Explicitly-coloured button (rather than the system's adaptive
+    /// bordered style) so it stays clearly visible against the dark
+    /// background regardless of the system's light/dark appearance.
+    private func historyButton(
+        title: String,
+        systemImage: String,
+        color: Color,
+        enabled: Bool,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Label(title, systemImage: systemImage)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundColor(.white)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(enabled ? color : Color.gray.opacity(0.35))
+                .clipShape(RoundedRectangle(cornerRadius: 6))
+        }
+        .buttonStyle(.plain)
+        .disabled(!enabled)
     }
 
     private var foundationRow: some View {

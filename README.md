@@ -85,13 +85,18 @@ reached — that doesn't skip any reachable win).
 - Pick a **time limit** (10s/30s/60s/2m), then **Solve Current Game**. It
   searches in the background — your board stays interactive.
 - This game's search space is astronomically large, so most positions
-  will very likely just **time out inconclusively** rather than reach a
-  definitive answer, especially at 10-30s. A time-out means "didn't
-  finish," not "unsolvable."
+  will very likely just hit the time limit rather than reach a definitive
+  answer, especially at 10-30s. Hitting it **pauses** the search rather
+  than throwing it away — press **Continue** to keep going with another
+  time budget, picking up exactly where it left off (explored states and
+  all), instead of starting over from scratch. Keep pressing Continue to
+  keep accumulating search time.
 - If it finds a win, **Play Next Move** steps through the solution on
   your actual board, one move at a time (through the normal Undo-tracked
   path, so you can undo it like any other move).
-- **Stop** cancels an in-progress search early.
+- **Stop** cancels an in-progress search and discards it — unlike hitting
+  the time limit, this is not resumable. Starting a new "Solve Current
+  Game" also discards any paused search.
 
 ## AI
 

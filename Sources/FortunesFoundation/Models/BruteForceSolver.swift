@@ -10,9 +10,12 @@ import Foundation
 /// This game's search space is astronomically large, so genuinely
 /// exhaustive completion isn't realistic for most positions within any
 /// human-scale time budget. A hard wall-clock time limit is required —
-/// hitting it means "inconclusive," not "unsolvable." Separate from
-/// SolitaireAI on purpose: this is a different kind of tool (exact search
-/// vs. a learned approximation), not a competing implementation of it.
+/// hitting it **pauses** the search rather than abandoning it: all
+/// explored states and search progress are kept, and `continueSearching`
+/// resumes exactly where it left off with a fresh time budget. Only an
+/// explicit `cancel()` (or starting a new search) discards it. Separate
+/// from SolitaireAI on purpose: this is a different kind of tool (exact
+/// search vs. a learned approximation), not a competing implementation.
 ///
 /// The search is iterative (an explicit heap-allocated stack), not
 /// recursive: background DispatchQueue worker threads get a much smaller
@@ -25,7 +28,7 @@ final class BruteForceSolver: ObservableObject {
         case searching
         case solved(moveCount: Int)
         case noSolutionFound(statesExplored: Int)
-        case timedOut(statesExplored: Int)
+        case paused(statesExplored: Int)
         case cancelled(statesExplored: Int)
     }
 
@@ -38,11 +41,15 @@ final class BruteForceSolver: ObservableObject {
 
     private let searchQueue = DispatchQueue(label: "BruteForceSolver.search", qos: .userInitiated)
     private var progress: SearchProgress?
+    private var session: SearchSession?
     private var progressTimer: Timer?
+    private var cumulativeElapsedSeconds: TimeInterval = 0
 
     /// Thread-safe (lock-backed) counter + cancel flag: the search loop on
     /// the background queue writes to it continuously; the main-thread
-    /// progress timer and the Stop button read/set it concurrently.
+    /// progress timer and the Stop button read/set it concurrently. Kept
+    /// alive (not recreated) across a pause/continue cycle so the explored
+    /// count keeps accumulating instead of resetting.
     private final class SearchProgress {
         private let lock = NSLock()
         private var explored = 0
@@ -69,105 +76,159 @@ final class BruteForceSolver: ObservableObject {
         var remainingMoves: [Move]
     }
 
-    /// Starts an exhaustive search from `game`'s current position. Runs on
-    /// a background queue against its own scratch GameState — `game`
-    /// itself is only read once (via a snapshot) and never touched again.
+    /// Everything a search needs to resume exactly where it paused. A
+    /// class (not a struct) so the background queue can mutate it in
+    /// place across the lifetime of one solve()...continueSearching()...
+    /// chain without it needing to flow back out through return values.
+    private final class SearchSession {
+        let worker: GameState
+        var visited: Set<String>
+        var stack: [Frame]
+        var path: [Move]
+
+        init(worker: GameState, visited: Set<String>, stack: [Frame], path: [Move]) {
+            self.worker = worker
+            self.visited = visited
+            self.stack = stack
+            self.path = path
+        }
+    }
+
+    private enum SearchOutcome {
+        case solved(path: [Move])
+        case exhausted
+        case pausedAtDeadline
+        case cancelled
+    }
+
+    /// Starts a brand-new exhaustive search from `game`'s current
+    /// position, discarding any previously paused search. Runs on a
+    /// background queue against its own scratch GameState — `game` itself
+    /// is only read once (via a snapshot) and never touched again.
     func solve(from game: GameState, timeLimit: TimeInterval) {
         guard status != .searching else { return }
-        status = .searching
-        statesExplored = 0
-        elapsedSeconds = 0
-        solution = []
-        solutionStepsPlayed = 0
 
         let snapshot = game.currentSnapshot()
-        let progress = SearchProgress()
-        self.progress = progress
+        let worker = GameState(seed: 0)
+        worker.restore(snapshot)
 
-        let startedAt = Date()
-        let deadline = startedAt.addingTimeInterval(timeLimit)
+        solution = []
+        solutionStepsPlayed = 0
+        cumulativeElapsedSeconds = 0
+        statesExplored = 0
+        elapsedSeconds = 0
+
+        if worker.isWon {
+            status = .solved(moveCount: 0)
+            return
+        }
+
+        let newProgress = SearchProgress()
+        var visited = Set<String>()
+        visited.insert(stateKey(for: worker))
+        newProgress.incrementExplored()
+        let initialFrame = Frame(snapshot: worker.currentSnapshot(), remainingMoves: worker.legalMoves())
+
+        progress = newProgress
+        session = SearchSession(worker: worker, visited: visited, stack: [initialFrame], path: [])
+
+        runCurrentSearch(timeLimit: timeLimit)
+    }
+
+    /// Resumes a search that paused after hitting its time limit, with a
+    /// fresh time budget. Does nothing if there's no paused search to
+    /// resume (e.g. it was cancelled, solved, or already exhausted).
+    func continueSearching(timeLimit: TimeInterval) {
+        guard case .paused = status, session != nil, progress != nil else { return }
+        runCurrentSearch(timeLimit: timeLimit)
+    }
+
+    private func runCurrentSearch(timeLimit: TimeInterval) {
+        guard let session, let progress else { return }
+        status = .searching
+
+        let runStartedAt = Date()
+        let deadline = runStartedAt.addingTimeInterval(timeLimit)
+        let baseElapsed = cumulativeElapsedSeconds
 
         progressTimer?.invalidate()
         progressTimer = Timer.scheduledTimer(withTimeInterval: 0.2, repeats: true) { [weak self] _ in
             guard let self else { return }
             self.statesExplored = progress.statesExplored
-            self.elapsedSeconds = Date().timeIntervalSince(startedAt)
+            self.elapsedSeconds = baseElapsed + Date().timeIntervalSince(runStartedAt)
         }
 
         searchQueue.async { [weak self] in
             guard let self else { return }
-            let worker = GameState(seed: 0)
-            worker.restore(snapshot)
-
-            let foundPath = self.iterativeSearch(from: worker, progress: progress, deadline: deadline)
+            let outcome = self.runIterativeSearch(session: session, progress: progress, deadline: deadline)
             let exploredCount = progress.statesExplored
-            let wasCancelled = progress.isCancelled
-            let timedOut = Date() >= deadline
+            let totalElapsed = baseElapsed + Date().timeIntervalSince(runStartedAt)
 
             DispatchQueue.main.async {
                 self.progressTimer?.invalidate()
+                self.cumulativeElapsedSeconds = totalElapsed
                 self.statesExplored = exploredCount
-                self.elapsedSeconds = Date().timeIntervalSince(startedAt)
-                if let foundPath {
-                    self.solution = foundPath
-                    self.status = .solved(moveCount: foundPath.count)
-                } else if wasCancelled {
-                    self.status = .cancelled(statesExplored: exploredCount)
-                } else if timedOut {
-                    self.status = .timedOut(statesExplored: exploredCount)
-                } else {
+                self.elapsedSeconds = totalElapsed
+
+                switch outcome {
+                case .solved(let path):
+                    self.solution = path
+                    self.status = .solved(moveCount: path.count)
+                    self.session = nil
+                    self.progress = nil
+                case .exhausted:
                     self.status = .noSolutionFound(statesExplored: exploredCount)
+                    self.session = nil
+                    self.progress = nil
+                case .pausedAtDeadline:
+                    self.status = .paused(statesExplored: exploredCount)
+                    // session/progress deliberately kept for continueSearching().
+                case .cancelled:
+                    self.status = .cancelled(statesExplored: exploredCount)
+                    self.session = nil
+                    self.progress = nil
                 }
             }
         }
     }
 
-    /// Depth-first search with an explicit stack instead of recursion.
-    /// `worker` starts at, and is mutated throughout, but the state it's
-    /// left in when this returns is unspecified — callers only care about
-    /// the returned path. Returns nil if no win was found before running
-    /// out of moves, getting cancelled, or hitting the deadline.
-    private func iterativeSearch(from worker: GameState, progress: SearchProgress, deadline: Date) -> [Move]? {
-        var visited = Set<String>()
-        var stack: [Frame] = []
-        var path: [Move] = []
+    /// Depth-first search with an explicit stack instead of recursion,
+    /// mutating `session` in place so its contents remain valid for a
+    /// future continueSearching() call if this run pauses.
+    private func runIterativeSearch(session: SearchSession, progress: SearchProgress, deadline: Date) -> SearchOutcome {
+        while let topIndex = session.stack.indices.last {
+            if progress.isCancelled { return .cancelled }
+            if Date() >= deadline { return .pausedAtDeadline }
 
-        if worker.isWon { return [] }
-        visited.insert(stateKey(for: worker))
-        progress.incrementExplored()
-        stack.append(Frame(snapshot: worker.currentSnapshot(), remainingMoves: worker.legalMoves()))
-
-        while let topIndex = stack.indices.last {
-            if progress.isCancelled || Date() >= deadline { return nil }
-
-            guard !stack[topIndex].remainingMoves.isEmpty else {
+            guard !session.stack[topIndex].remainingMoves.isEmpty else {
                 // No moves left to try from this level — back up one level.
-                stack.removeLast()
-                if !path.isEmpty { path.removeLast() }
+                session.stack.removeLast()
+                if !session.path.isEmpty { session.path.removeLast() }
                 continue
             }
 
-            let move = stack[topIndex].remainingMoves.removeLast()
-            worker.restore(stack[topIndex].snapshot)
-            guard worker.performMove(move, recordForUndo: false) else { continue }
-            path.append(move)
+            let move = session.stack[topIndex].remainingMoves.removeLast()
+            session.worker.restore(session.stack[topIndex].snapshot)
+            guard session.worker.performMove(move, recordForUndo: false) else { continue }
+            session.path.append(move)
 
-            if worker.isWon { return path }
+            if session.worker.isWon { return .solved(path: session.path) }
 
-            let key = stateKey(for: worker)
-            if visited.contains(key) {
-                path.removeLast()
+            let key = stateKey(for: session.worker)
+            if session.visited.contains(key) {
+                session.path.removeLast()
                 continue
             }
-            visited.insert(key)
+            session.visited.insert(key)
             progress.incrementExplored()
-            stack.append(Frame(snapshot: worker.currentSnapshot(), remainingMoves: worker.legalMoves()))
+            session.stack.append(Frame(snapshot: session.worker.currentSnapshot(), remainingMoves: session.worker.legalMoves()))
         }
-        return nil
+        return .exhausted
     }
 
-    /// Stops an in-progress search early. The result becomes `.cancelled`
-    /// once the search loop notices and unwinds.
+    /// Stops an in-progress search early and discards it (unlike hitting
+    /// the time limit, which pauses and stays resumable). The result
+    /// becomes `.cancelled` once the search loop notices and unwinds.
     func cancel() {
         progress?.requestCancel()
     }

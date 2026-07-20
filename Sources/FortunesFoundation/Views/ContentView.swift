@@ -206,6 +206,12 @@ struct ContentView: View {
                 }
             }
 
+            if isSolverPaused {
+                historyButton(title: "Continue", systemImage: "arrow.clockwise", color: .indigo, enabled: true) {
+                    solver.continueSearching(timeLimit: solverTimeLimit)
+                }
+            }
+
             if isSolverSolved {
                 historyButton(title: "Play Next Move", systemImage: "play.fill", color: .green, enabled: solver.hasMoreSolutionSteps) {
                     solver.playNextSolutionMove(in: game)
@@ -222,6 +228,11 @@ struct ContentView: View {
         return false
     }
 
+    private var isSolverPaused: Bool {
+        if case .paused = solver.status { return true }
+        return false
+    }
+
     private var solverSummary: String {
         switch solver.status {
         case .idle:
@@ -232,8 +243,8 @@ struct ContentView: View {
             return "solved! \(moveCount) moves (\(solver.solutionStepsPlayed) played)"
         case .noSolutionFound(let explored):
             return "no solution exists (explored \(explored) states)"
-        case .timedOut(let explored):
-            return "time limit reached — inconclusive (explored \(explored) states)"
+        case .paused(let explored):
+            return "paused at time limit — inconclusive so far (explored \(explored) states, resumable)"
         case .cancelled(let explored):
             return "stopped (explored \(explored) states)"
         }

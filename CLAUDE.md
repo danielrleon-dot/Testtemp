@@ -108,8 +108,17 @@ That doesn't skip any reachable win, just redundant re-exploration.
 - Requires a hard wall-clock time limit (the project owner explicitly
   asked for this) — this game's search space is large enough that
   genuine exhaustive completion isn't realistic for most positions.
-  Timing out means *inconclusive*, and the UI is careful to say so
-  rather than implying "unsolvable."
+  Hitting the deadline **pauses** rather than abandons the search (see
+  below) — the UI calls it "paused... inconclusive so far," not
+  "unsolvable."
+- `SearchSession` (worker `GameState` + `visited`/`stack`/`path`) and the
+  `SearchProgress` counter are both kept alive across a pause instead of
+  being recreated, specifically so `continueSearching(timeLimit:)` can
+  resume with the exact same explored-state set and search stack, plus a
+  fresh deadline — not a restart. Only `cancel()` (Stop) or starting a new
+  `solve()` discards them; hitting the deadline does not.
+  `cumulativeElapsedSeconds` likewise accumulates across pause/continue
+  rather than resetting per run.
 - Runs on its own background `DispatchQueue`, entirely against a scratch
   `GameState` restored from a snapshot of the player's board — never
   mutates the live game during the search itself.

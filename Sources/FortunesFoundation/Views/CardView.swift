@@ -2,52 +2,50 @@ import SwiftUI
 
 struct CardView: View {
     let card: Card
-    var isSelected: Bool = false
-    var width: CGFloat = 70
-    var height: CGFloat = 96
+    var width: CGFloat = 68
+    var height: CGFloat = 92
 
     var body: some View {
         ZStack {
             RoundedRectangle(cornerRadius: 8)
-                .fill(card.isFaceUp ? Color(white: 0.98) : backColor)
+                .fill(Color(white: 0.98))
                 .overlay(
                     RoundedRectangle(cornerRadius: 8)
-                        .stroke(isSelected ? Color.yellow : Color.black.opacity(0.4), lineWidth: isSelected ? 3 : 1)
+                        .stroke(borderColor, lineWidth: card.isTrump ? 2 : 1.5)
                 )
                 .shadow(radius: 1, y: 1)
 
-            if card.isFaceUp {
-                VStack(spacing: 4) {
-                    Text(card.shortLabel)
-                        .font(.system(size: 13, weight: .semibold, design: .rounded))
-                    if card.isMajor {
-                        Text(card.displayLabel)
-                            .font(.system(size: 9))
-                            .multilineTextAlignment(.center)
-                            .lineLimit(2)
-                    }
+            VStack(spacing: 2) {
+                Text(card.shortLabel)
+                    .font(.system(size: 15, weight: .bold, design: .rounded))
+                if card.isTrump {
+                    Text("TRUMP")
+                        .font(.system(size: 7, weight: .semibold))
+                        .tracking(1)
                 }
-                .foregroundColor(textColor)
-                .padding(4)
-            } else {
-                Image(systemName: "moon.stars.fill")
-                    .foregroundColor(.white.opacity(0.7))
             }
+            .foregroundColor(textColor)
         }
         .frame(width: width, height: height)
     }
 
-    private var backColor: Color {
-        Color(red: 0.20, green: 0.11, blue: 0.32)
+    private var textColor: Color {
+        guard let colour = card.colour else { return .black }
+        return colourColor(colour)
     }
 
-    private var textColor: Color {
-        guard card.isFaceUp else { return .white }
-        if card.isMajor { return Color(red: 0.45, green: 0.1, blue: 0.5) }
-        switch card.suitColor {
-        case .crimson: return Color(red: 0.7, green: 0.1, blue: 0.15)
-        case .indigo: return Color(red: 0.1, green: 0.15, blue: 0.55)
-        case .none: return .black
+    private var borderColor: Color {
+        if card.isTrump { return .black.opacity(0.75) }
+        guard let colour = card.colour else { return .black.opacity(0.4) }
+        return colourColor(colour).opacity(0.6)
+    }
+
+    private func colourColor(_ colour: Colour) -> Color {
+        switch colour {
+        case .red: return Color(red: 0.72, green: 0.12, blue: 0.12)
+        case .blue: return Color(red: 0.12, green: 0.28, blue: 0.75)
+        case .green: return Color(red: 0.13, green: 0.5, blue: 0.22)
+        case .yellow: return Color(red: 0.75, green: 0.58, blue: 0.05)
         }
     }
 }

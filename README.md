@@ -1,9 +1,11 @@
-# Fortune's Foundation
+# Solitaire
 
-A native macOS solitaire game built with Swift + SwiftUI, played with a 78-card
-tarot deck (56 minor arcana across four suits, plus 22 major arcana). It's an
-original variant inspired by tarot-card solitaire, not a clone of any
-commercial title — the exact rules are documented below.
+A native macOS solitaire game built with Swift + SwiftUI, using a custom
+70-card ruleset (4 colours 2...King plus trumps 0...21, an 11-column
+tableau, dual trump foundations, and a single-card Reserve). The full rules
+live in [`RULES.md`](RULES.md) — edit that file to change the rules; the
+game logic in `Sources/FortunesFoundation/Models/GameState.swift` should be
+kept in sync with it.
 
 ## Requirements
 
@@ -21,24 +23,21 @@ commercial title — the exact rules are documented below.
 swift run
 ```
 
-## Rules
+## Playing
 
-- The deck has 4 minor-arcana suits (Wands, Cups, Swords, Pentacles), each
-  ranked Ace...10, Page, Knight, Queen, King, plus 22 major arcana cards
-  numbered 0 (The Fool) through 21 (The World).
-- The tableau has 8 columns dealt with 1...8 cards each; the rest of the deck
-  is the stock. Click the stock to flip a card to the waste pile.
-- Four foundations build each minor suit up from Ace to King. A fifth
-  foundation builds the major arcana in order from The Fool to The World.
-- In the tableau, minor arcana cards build downward in alternating suit
-  color (Wands/Swords vs. Cups/Pentacles); a valid descending run can be
-  moved as a group. Major arcana cards can't have anything stacked on them
-  in the tableau — they can only move to an empty column or straight to the
-  major arcana foundation.
-- Click a card to select it (and its movable run), then click a
-  destination pile to move it there. Click the selected card again to
-  deselect.
-- Win by moving all 78 cards onto the five foundations.
+- Drag the exposed (bottom-most) card of any tableau column, or the card in
+  the Reserve, onto another card one rank away of the same colour (or
+  another trump one number away), or onto an empty column.
+- If several cards at the bottom of a column form a same-colour or
+  all-trump consecutive-rank run, grab the bottom card and the whole run
+  drags together.
+- Trump 0 and 21, and any trump that's the next needed card for either
+  trump foundation, fly there automatically the instant they're exposed —
+  even mid-drag. Colour cards auto-move to their foundation once a drag
+  ends, but never while a card sits in the Reserve.
+- Win by clearing all 70 cards onto the seven foundations.
+
+See `RULES.md` for the full, precise ruleset.
 
 ## Project layout
 
@@ -46,14 +45,18 @@ swift run
 Sources/FortunesFoundation/
   App.swift                    entry point
   Models/
-    Suit.swift, MinorRank.swift, MajorArcana.swift, Card.swift   card model
-    Deck.swift                 deck construction/shuffle
-    GameState.swift            game state + move rules
+    Colour.swift, ColourRank.swift, Card.swift   card model
+    PileLocation.swift          identifies each pile/slot
+    Deck.swift                  deck construction/shuffle
+    GameState.swift             game state, move + auto-move rules
   Views/
-    ContentView.swift          top-level layout
-    CardView.swift             single card rendering
-    TableauColumnView.swift    tableau column
-    PileViews.swift            foundations, stock, waste
+    ContentView.swift           top-level layout
+    CardView.swift               single card rendering
+    TableauColumnView.swift     tableau column + drag source
+    ReserveView.swift           reserve slot + drag source
+    FoundationViews.swift       trump + colour foundation slots
+    DraggedStackView.swift      floating card(s) while dragging
+    TargetFrame.swift           drop-target frame tracking (hit-testing)
 ```
 
 ## Note

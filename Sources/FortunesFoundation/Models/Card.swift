@@ -1,55 +1,51 @@
 import Foundation
 
 enum CardKind: Hashable, Codable {
-    case minor(suit: Suit, rank: MinorRank)
-    case major(MajorArcana)
+    case colour(Colour, ColourRank)
+    case trump(Int)
 }
 
 struct Card: Identifiable, Hashable, Codable {
     let id: UUID
     let kind: CardKind
-    var isFaceUp: Bool = false
 
-    init(kind: CardKind, isFaceUp: Bool = false) {
+    init(kind: CardKind) {
         self.id = UUID()
         self.kind = kind
-        self.isFaceUp = isFaceUp
     }
 
-    var displayLabel: String {
+    var rankValue: Int {
         switch kind {
-        case .minor(let suit, let rank):
-            return "\(rank.label) of \(suit.rawValue.capitalized)"
-        case .major(let arcana):
-            return arcana.name
+        case .colour(_, let rank): return rank.rawValue
+        case .trump(let n): return n
         }
+    }
+
+    var isTrump: Bool {
+        if case .trump = kind { return true }
+        return false
+    }
+
+    var colour: Colour? {
+        if case .colour(let colour, _) = kind { return colour }
+        return nil
     }
 
     var shortLabel: String {
         switch kind {
-        case .minor(let suit, let rank):
-            let rankText: String
-            switch rank {
-            case .ace: rankText = "A"
-            case .page: rankText = "P"
-            case .knight: rankText = "Kn"
-            case .queen: rankText = "Q"
-            case .king: rankText = "K"
-            default: rankText = "\(rank.rawValue)"
-            }
-            return "\(rankText)\(suit.symbol)"
-        case .major(let arcana):
-            return "\(arcana.rawValue)"
+        case .colour(let colour, let rank):
+            return "\(rank.label)\(colour.shortCode)"
+        case .trump(let n):
+            return "\(n)"
         }
     }
 
-    var suitColor: SuitColor? {
-        if case .minor(let suit, _) = kind { return suit.color }
-        return nil
-    }
-
-    var isMajor: Bool {
-        if case .major = kind { return true }
-        return false
+    var displayLabel: String {
+        switch kind {
+        case .colour(let colour, let rank):
+            return "\(rank.label) of \(colour.label)"
+        case .trump(let n):
+            return "Trump \(n)"
+        }
     }
 }

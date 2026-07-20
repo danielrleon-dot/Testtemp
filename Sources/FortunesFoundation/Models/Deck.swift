@@ -1,16 +1,16 @@
 import Foundation
 
 enum Deck {
-    /// A full 78-card tarot deck (56 minor arcana + 22 major arcana), shuffled.
+    /// 4 colours x (2...King) + trumps (0...21) = 70 cards, shuffled. See RULES.md.
     static func fullShuffledDeck() -> [Card] {
         var cards: [Card] = []
-        for suit in Suit.allCases {
-            for rank in MinorRank.allCases {
-                cards.append(Card(kind: .minor(suit: suit, rank: rank)))
+        for colour in Colour.allCases {
+            for rank in ColourRank.allCases {
+                cards.append(Card(kind: .colour(colour, rank)))
             }
         }
-        for arcana in MajorArcana.allCases {
-            cards.append(Card(kind: .major(arcana)))
+        for n in 0...21 {
+            cards.append(Card(kind: .trump(n)))
         }
         cards.shuffle()
         return cards

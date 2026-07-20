@@ -54,14 +54,14 @@ struct ContentView: View {
 
             Rectangle()
                 .fill(Color.white.opacity(0.2))
-                .frame(width: 1, height: 92)
+                .frame(width: 1, height: 100)
 
             TrumpFoundationView(title: "Trumps ↑ from 0", pile: game.bottomTrump, location: .bottomTrump)
             TrumpFoundationView(title: "Trumps ↓ from 21", pile: game.topTrump, location: .topTrump)
 
             Rectangle()
                 .fill(Color.white.opacity(0.2))
-                .frame(width: 1, height: 92)
+                .frame(width: 1, height: 100)
 
             ForEach(Colour.allCases) { colour in
                 ColourFoundationView(colour: colour, pile: game.colourFoundations[colour] ?? [])

@@ -10,7 +10,7 @@ struct TrumpFoundationView: View {
             ZStack {
                 RoundedRectangle(cornerRadius: 8)
                     .stroke(Color.white.opacity(0.35), lineWidth: 1)
-                    .frame(width: 68, height: 92)
+                    .frame(width: 74, height: 100)
                 if let top = pile.last {
                     CardView(card: top)
                 } else {
@@ -18,7 +18,7 @@ struct TrumpFoundationView: View {
                         .font(.caption2)
                         .foregroundColor(.white.opacity(0.4))
                         .multilineTextAlignment(.center)
-                        .frame(width: 60)
+                        .frame(width: 64)
                 }
             }
             .reportFrame(location)
@@ -38,7 +38,7 @@ struct ColourFoundationView: View {
             ZStack {
                 RoundedRectangle(cornerRadius: 8)
                     .stroke(Color.white.opacity(0.35), lineWidth: 1)
-                    .frame(width: 68, height: 92)
+                    .frame(width: 74, height: 100)
                 if let top = pile.last {
                     CardView(card: top)
                 } else {

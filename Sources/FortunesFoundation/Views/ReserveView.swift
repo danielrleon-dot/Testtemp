@@ -8,7 +8,7 @@ struct ReserveView: View {
             ZStack {
                 RoundedRectangle(cornerRadius: 8)
                     .stroke(Color.white.opacity(0.35), lineWidth: 1)
-                    .frame(width: 68, height: 92)
+                    .frame(width: 74, height: 100)
                 if let card = game.reserve {
                     CardView(card: card)
                         .gesture(dragGesture)

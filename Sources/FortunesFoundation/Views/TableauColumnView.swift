@@ -4,15 +4,16 @@ struct TableauColumnView: View {
     let columnIndex: Int
     @ObservedObject var game: GameState
 
-    private let cardHeight: CGFloat = 92
-    private let overlap: CGFloat = 26
+    private let cardWidth: CGFloat = 74
+    private let cardHeight: CGFloat = 100
+    private let overlap: CGFloat = 34
 
     var body: some View {
         let column = game.tableau[columnIndex]
         ZStack(alignment: .top) {
             RoundedRectangle(cornerRadius: 8)
                 .stroke(Color.white.opacity(0.25), lineWidth: 1)
-                .frame(width: 68, height: cardHeight)
+                .frame(width: cardWidth, height: cardHeight)
 
             ForEach(Array(column.enumerated()), id: \.element.id) { index, card in
                 let isApparent = index == column.count - 1
@@ -22,7 +23,7 @@ struct TableauColumnView: View {
                     .gesture(dragGesture, including: isApparent ? .all : .none)
             }
         }
-        .frame(width: 68, alignment: .top)
+        .frame(width: cardWidth, alignment: .top)
         .frame(minHeight: cardHeight + CGFloat(max(column.count - 1, 0)) * overlap, alignment: .top)
         .reportFrame(.tableau(columnIndex))
     }

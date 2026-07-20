@@ -46,6 +46,12 @@ Cards can leave the tableau or the Reserve automatically, without the
 player dragging them, whenever they are "apparent" (i.e. the active card
 at the bottom of a tableau column, or the card sitting in the Reserve).
 
+Trumps and colour cards are checked the same way for **when** this
+happens: nothing auto-moves while a card is still actively mid-drag.
+The check only runs once the currently-dragged card has been **dropped
+somewhere** — into a tableau column, into the Reserve, or into one of the
+foundation slots — no matter where it lands.
+
 ### Trumps
 
 - An apparent trump **0** always auto-moves to the Bottom Trump Slot.
@@ -56,8 +62,6 @@ at the bottom of a tableau column, or the card sitting in the Reserve).
 - An apparent trump auto-moves to the **Top Trump Slot** whenever its
   number is exactly **one less** than the current top card of the Top
   Trump Slot.
-- Trump auto-moves happen **continuously**, including while the player is
-  actively dragging a (different) card and has not yet dropped it.
 
 ### Colour cards
 
@@ -67,9 +71,6 @@ at the bottom of a tableau column, or the card sitting in the Reserve).
 - Colour auto-moves are **suspended** entirely whenever there is a card
   in the Reserve. They resume only once the Reserve's card has been
   placed into a free tableau slot (an empty column).
-- Colour auto-moves are checked **only after a drag ends** (a card is
-  dropped into a slot) — unlike trumps, they do **not** trigger while a
-  card is still being dragged mid-move.
 
 ### Reserve
 

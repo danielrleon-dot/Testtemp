@@ -32,20 +32,23 @@ Key shape of the ruleset (see RULES.md for the authoritative version):
   the other 10.
 - Two trump foundations (build up from 0, build down from 21), four colour
   foundations (build up from 2), one single-card Reserve slot.
-- Trumps auto-move to their foundation the instant they're exposed, even
-  mid-drag. Colour cards only auto-move once a drag/drop resolves, and
-  never while the Reserve is occupied.
+- Trumps and colour cards both only auto-move once a drag/drop resolves
+  (never mid-drag), regardless of which pile the dragged card lands in.
+  Colour auto-moves are additionally suspended while the Reserve is
+  occupied.
 - Same-colour or all-trump consecutive-rank runs can be dragged together.
 
 ## Status / important caveat
 
-This code was written entirely in a cloud sandbox with **no Swift
-toolchain and no macOS** — it has never been compiled or run. Do not
-assume it builds cleanly. The first Xcode build on an actual Mac should be
-treated as a debugging pass, not a working baseline. Pay particular
-attention to:
-- The drag-and-drop + mid-drag auto-move logic in `GameState.swift`
-  (`beginDrag`, `endDrag`, `runTrumpAutoMoves`, `runFullAutoMoves`).
+This code was originally written entirely in a cloud sandbox with **no
+Swift toolchain and no macOS**. It has since been built and run
+successfully on the project owner's Mac (Xcode 26.6), with a few real
+bugs already found and fixed there (see git log) — but most work on this
+repo is still done blind, without a Swift toolchain, so don't assume new
+changes build cleanly until confirmed on a Mac. Pay particular attention
+to:
+- The drag-and-drop + auto-move logic in `GameState.swift`
+  (`beginDrag`, `endDrag`, `runFullAutoMoves`).
 - The frame-based drop-target hit-testing in `Views/TargetFrame.swift`
   (`TargetFramePreferenceKey` + `.reportFrame(_:)`), which the drag
   gestures in `TableauColumnView.swift` / `ReserveView.swift` rely on.

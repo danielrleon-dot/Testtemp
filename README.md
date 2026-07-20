@@ -32,9 +32,9 @@ swift run
   all-trump consecutive-rank run, grab the bottom card and the whole run
   drags together.
 - Trump 0 and 21, and any trump that's the next needed card for either
-  trump foundation, fly there automatically the instant they're exposed —
-  even mid-drag. Colour cards auto-move to their foundation once a drag
-  ends, but never while a card sits in the Reserve.
+  trump foundation, auto-move there once a drag ends — never mid-drag.
+  Colour cards auto-move the same way, but never while a card sits in the
+  Reserve.
 - Win by clearing all 70 cards onto the seven foundations.
 
 See `RULES.md` for the full, precise ruleset.
@@ -61,6 +61,7 @@ Sources/FortunesFoundation/
 
 ## Note
 
-This was written in an environment without access to a Swift toolchain or
-macOS, so it hasn't been compiled or run yet — build it in Xcode first and
-let me know if anything doesn't compile or feels off in play.
+Most of this was originally written in an environment without access to a
+Swift toolchain or macOS. It's since been built and run on a real Mac, and
+a few bugs found there have already been fixed — but if something doesn't
+compile or feels off in play, say so.

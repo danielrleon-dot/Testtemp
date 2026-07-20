@@ -7,9 +7,9 @@ import SwiftUI
 ///   11 tableau columns (the middle column starts empty), 7 cards each.
 /// - Two trump foundations (build up from 0, build down from 21) and four
 ///   colour foundations (build up from 2), plus a single-card Reserve slot.
-/// - Trumps auto-move to their foundation the instant they become apparent,
-///   even mid-drag. Colour cards only auto-move once a drag/drop resolves,
-///   and never while the Reserve is occupied.
+/// - Trumps and colour cards both only auto-move once a drag/drop resolves
+///   (never mid-drag), regardless of where the dragged card lands. Colour
+///   auto-moves are additionally suspended while the Reserve is occupied.
 final class GameState: ObservableObject {
     @Published var tableau: [[Card]] = []
     @Published var reserve: Card? = nil
@@ -73,7 +73,6 @@ final class GameState: ObservableObject {
             return nil
         }
         dragging = DragState(source: location, cards: run)
-        runTrumpAutoMoves()
         return run
     }
 
@@ -214,27 +213,9 @@ final class GameState: ObservableObject {
         }
     }
 
-    /// Trumps only — used while a drag is in progress (mid-drag auto-flight).
-    private func runTrumpAutoMoves() {
-        var moved = true
-        while moved {
-            moved = false
-            for col in tableau.indices {
-                guard let apparent = tableau[col].last, apparent.isTrump,
-                      let dest = autoDestination(for: apparent) else { continue }
-                tableau[col].removeLast()
-                place(cards: [apparent], on: dest)
-                moved = true
-            }
-            if let card = reserve, card.isTrump, let dest = autoDestination(for: card) {
-                reserve = nil
-                place(cards: [card], on: dest)
-                moved = true
-            }
-        }
-    }
-
-    /// Trumps + colours — run after a drop (or after the initial deal).
+    /// Trumps + colours — run after a drop resolves, no matter where the
+    /// dragged card landed (a column, the Reserve, or a foundation slot),
+    /// or after the initial deal. Never runs while a drag is in progress.
     private func runFullAutoMoves() {
         var moved = true
         while moved {

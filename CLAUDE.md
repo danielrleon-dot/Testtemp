@@ -94,6 +94,36 @@ about without a compiler to check it.
   meant as a working foundation to keep improving (better features, a
   neural net, prioritized self-play, etc.), not a finished solver.
 
+## Solver (BruteForceSolver)
+
+Deliberately **separate** from SolitaireAI — a different kind of tool
+(exact exhaustive search vs. a learned approximation), not a competing
+implementation of it. Depth-first search with backtracking from the
+board the player currently has open; the only pruning beyond pure brute
+force is skipping board positions already proven fruitless earlier in
+the *same* search (`stateKey(for:)`, a canonical string over every pile
+in order — order matters for legality, so it's not just set membership).
+That doesn't skip any reachable win, just redundant re-exploration.
+
+- Requires a hard wall-clock time limit (the project owner explicitly
+  asked for this) — this game's search space is large enough that
+  genuine exhaustive completion isn't realistic for most positions.
+  Timing out means *inconclusive*, and the UI is careful to say so
+  rather than implying "unsolvable."
+- Runs on its own background `DispatchQueue`, entirely against a scratch
+  `GameState` restored from a snapshot of the player's board — never
+  mutates the live game during the search itself.
+- Progress (`statesExplored`, `elapsedSeconds`) crosses threads via a
+  small lock-backed `SearchProgress` class polled by a main-thread
+  `Timer`, not raw shared-state access — the search loop runs as one
+  long synchronous closure on its queue, so a `DispatchQueue.sync` read
+  from the main thread would block until the whole search finished,
+  which is why this needed an actual lock instead.
+- If a solution is found, `playNextSolutionMove(in:)` applies it to the
+  live game one step at a time (through the same undo-tracked
+  `performMove` path as everything else), so the player can watch it
+  play out and still undo it afterward.
+
 ## Status / important caveat
 
 This code was originally written entirely in a cloud sandbox with **no
@@ -130,6 +160,7 @@ Sources/FortunesFoundation/
     BoardFeatures.swift         hand-crafted features for the AI
     BoardEvaluator.swift        linear value function + TD(0) update
     SolitaireAI.swift           self-play training loop, move suggestion
+    BruteForceSolver.swift      exhaustive search for a winning sequence
   Views/
     ContentView.swift           top-level layout
     CardView.swift              single card rendering

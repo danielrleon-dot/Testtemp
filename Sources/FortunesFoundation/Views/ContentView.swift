@@ -3,13 +3,16 @@ import SwiftUI
 struct ContentView: View {
     @StateObject private var game = GameState()
     @StateObject private var ai = SolitaireAI()
+    @StateObject private var solver = BruteForceSolver()
     @State private var seedInput: String = ""
+    @State private var solverTimeLimit: Double = 30
 
     var body: some View {
         ZStack {
             VStack(spacing: 20) {
                 header
                 aiPanel
+                solverPanel
                 foundationRow
                 tableauRow
                 Spacer()
@@ -169,6 +172,71 @@ struct ContentView: View {
         }
         let winPercent = Int((Double(ai.gamesWon) / Double(ai.gamesPlayed) * 100).rounded())
         return "\(ai.gamesWon)/\(ai.gamesPlayed) won this session (\(winPercent)%) · \(lifetime)"
+    }
+
+    /// Separate from the AI: this is exhaustive search, not a learned
+    /// approximation, and is expected to time out inconclusively on most
+    /// positions given how large this game's search space is.
+    private var solverPanel: some View {
+        HStack(spacing: 12) {
+            Text("Solver:")
+                .foregroundColor(.white.opacity(0.6))
+            Text(solverSummary)
+                .font(.system(.body, design: .monospaced))
+                .foregroundColor(.white.opacity(0.85))
+                .lineLimit(1)
+
+            Picker("", selection: $solverTimeLimit) {
+                Text("10s").tag(10.0)
+                Text("30s").tag(30.0)
+                Text("60s").tag(60.0)
+                Text("2m").tag(120.0)
+            }
+            .pickerStyle(.menu)
+            .frame(width: 70)
+            .disabled(solver.status == .searching)
+
+            if solver.status == .searching {
+                historyButton(title: "Stop", systemImage: "stop.fill", color: .red, enabled: true) {
+                    solver.cancel()
+                }
+            } else {
+                historyButton(title: "Solve Current Game", systemImage: "magnifyingglass", color: .indigo, enabled: !game.isWon) {
+                    solver.solve(from: game, timeLimit: solverTimeLimit)
+                }
+            }
+
+            if isSolverSolved {
+                historyButton(title: "Play Next Move", systemImage: "play.fill", color: .green, enabled: solver.hasMoreSolutionSteps) {
+                    solver.playNextSolutionMove(in: game)
+                }
+            }
+
+            Spacer()
+        }
+        .padding(.horizontal, 24)
+    }
+
+    private var isSolverSolved: Bool {
+        if case .solved = solver.status { return true }
+        return false
+    }
+
+    private var solverSummary: String {
+        switch solver.status {
+        case .idle:
+            return "idle"
+        case .searching:
+            return "searching… \(solver.statesExplored) states, \(Int(solver.elapsedSeconds))s"
+        case .solved(let moveCount):
+            return "solved! \(moveCount) moves (\(solver.solutionStepsPlayed) played)"
+        case .noSolutionFound(let explored):
+            return "no solution exists (explored \(explored) states)"
+        case .timedOut(let explored):
+            return "time limit reached — inconclusive (explored \(explored) states)"
+        case .cancelled(let explored):
+            return "stopped (explored \(explored) states)"
+        }
     }
 
     private var foundationRow: some View {

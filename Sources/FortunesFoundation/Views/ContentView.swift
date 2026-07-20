@@ -163,9 +163,12 @@ struct ContentView: View {
     }
 
     private var aiSummary: String {
-        guard ai.gamesPlayed > 0 else { return "untrained" }
+        let lifetime = "\(ai.totalEpisodesTrained) lifetime"
+        guard ai.gamesPlayed > 0 else {
+            return ai.totalEpisodesTrained > 0 ? "untrained this session · \(lifetime)" : "untrained"
+        }
         let winPercent = Int((Double(ai.gamesWon) / Double(ai.gamesPlayed) * 100).rounded())
-        return "\(ai.gamesWon)/\(ai.gamesPlayed) games won (\(winPercent)%)"
+        return "\(ai.gamesWon)/\(ai.gamesPlayed) won this session (\(winPercent)%) · \(lifetime)"
     }
 
     private var foundationRow: some View {

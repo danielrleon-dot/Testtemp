@@ -80,6 +80,11 @@ about without a compiler to check it.
   `@Published`, specifically so it's not touched from two threads via
   Combine); only the summary `@Published` stats hop back to the main
   thread when a training run finishes.
+- Exploration rate decays with `totalEpisodesTrained` (0.15 → floor 0.02,
+  see `explorationRate(afterEpisodes:)`), not a fixed constant — a fixed
+  rate keeps sabotaging otherwise-good, near-complete games forever.
+  `totalEpisodesTrained` is lifetime, persisted separately from the
+  per-launch `gamesPlayed`/`gamesWon` session counters.
 - `SolitaireAI.suggestMove(for:)` runs synchronously on the caller's
   thread (expected: main, via the "AI Move" button) and scores every
   legal move by actually applying it to the passed-in live `GameState`,

@@ -6,22 +6,26 @@ import Foundation
 /// every move nudge the value function toward better predicting how
 /// promising the resulting board is. Training runs on a background queue
 /// against disposable GameState instances it creates itself — it never
-/// touches whatever game the player currently has open. Learned weights
-/// persist across launches via UserDefaults.
+/// touches whatever game the player currently has open. Learned weights,
+/// and the lifetime training count, persist across launches via
+/// UserDefaults.
 final class SolitaireAI: ObservableObject {
     private var evaluator: BoardEvaluator
     @Published private(set) var gamesPlayed: Int = 0
     @Published private(set) var gamesWon: Int = 0
     @Published private(set) var isTraining: Bool = false
+    @Published private(set) var totalEpisodesTrained: Int
 
     private let learningRate = 0.01
     private let discount = 0.98
-    private let explorationRate = 0.15
     private let maxStepsPerGame = 400
     private let trainingQueue = DispatchQueue(label: "SolitaireAI.training", qos: .utility)
 
+    private static let episodesKey = "SolitaireAI.totalEpisodesTrained"
+
     init() {
         evaluator = BoardEvaluator.loadFromDisk() ?? BoardEvaluator()
+        totalEpisodesTrained = UserDefaults.standard.integer(forKey: Self.episodesKey)
     }
 
     /// Runs `episodes` self-play games on a background queue, updating the
@@ -30,18 +34,23 @@ final class SolitaireAI: ObservableObject {
     func train(episodes: Int) {
         guard !isTraining else { return }
         isTraining = true
+        let startingTotal = totalEpisodesTrained
         trainingQueue.async { [weak self] in
             guard let self else { return }
             var played = 0
             var won = 0
-            for _ in 0..<episodes {
-                if self.playOneEpisode(learn: true) { won += 1 }
+            for i in 0..<episodes {
+                let rate = self.explorationRate(afterEpisodes: startingTotal + i)
+                if self.playOneEpisode(learn: true, explorationRate: rate) { won += 1 }
                 played += 1
             }
             self.evaluator.saveToDisk()
+            let newTotal = startingTotal + played
+            UserDefaults.standard.set(newTotal, forKey: Self.episodesKey)
             DispatchQueue.main.async {
                 self.gamesPlayed += played
                 self.gamesWon += won
+                self.totalEpisodesTrained = newTotal
                 self.isTraining = false
             }
         }
@@ -58,8 +67,16 @@ final class SolitaireAI: ObservableObject {
         return bestMove(moves, in: game)
     }
 
+    /// Random-move probability during training, decaying as more games
+    /// accumulate (lifetime, not just this run) — early on the AI needs to
+    /// explore to find anything that works at all, but a fixed rate would
+    /// keep sabotaging otherwise-good, near-complete games forever.
+    private func explorationRate(afterEpisodes n: Int) -> Double {
+        max(0.02, 0.15 - Double(n) * 0.00005)
+    }
+
     @discardableResult
-    private func playOneEpisode(learn: Bool) -> Bool {
+    private func playOneEpisode(learn: Bool, explorationRate: Double) -> Bool {
         let game = GameState(seed: UInt64.random(in: UInt64.min...UInt64.max))
         var previousFeatures = BoardFeatures.extract(from: game)
         var steps = 0

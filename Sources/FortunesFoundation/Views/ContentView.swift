@@ -47,13 +47,26 @@ struct ContentView: View {
                     .buttonStyle(.borderedProminent)
             }
 
-            HStack {
+            HStack(spacing: 12) {
                 Text("Moves: \(game.moveCount)")
                     .foregroundColor(.white.opacity(0.7))
-                Button("Undo") { game.undo() }
-                    .disabled(!game.canUndo)
-                Button("Redo") { game.redo() }
-                    .disabled(!game.canRedo)
+
+                Button {
+                    game.undo()
+                } label: {
+                    Label("Undo", systemImage: "arrow.uturn.backward")
+                }
+                .buttonStyle(.bordered)
+                .disabled(!game.canUndo)
+
+                Button {
+                    game.redo()
+                } label: {
+                    Label("Redo", systemImage: "arrow.uturn.forward")
+                }
+                .buttonStyle(.bordered)
+                .disabled(!game.canRedo)
+
                 Spacer()
                 Toggle("Drag whole column", isOn: $game.moveWholeColumn)
                     .toggleStyle(.checkbox)

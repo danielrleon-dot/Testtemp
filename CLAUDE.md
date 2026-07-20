@@ -113,6 +113,14 @@ That doesn't skip any reachable win, just redundant re-exploration.
 - Runs on its own background `DispatchQueue`, entirely against a scratch
   `GameState` restored from a snapshot of the player's board — never
   mutates the live game during the search itself.
+- The search (`iterativeSearch`) is iterative with an explicit
+  heap-allocated `[Frame]` stack, not recursive. A first version used
+  plain recursion and crashed with `EXC_BAD_ACCESS` on real hardware —
+  background `DispatchQueue` worker threads get a much smaller default
+  stack than the main thread, and this game can need thousands of moves
+  of depth before backtracking, which overflowed it. Don't reintroduce
+  recursion here without solving that problem some other way (e.g. a
+  dedicated `Thread` with an explicit larger `stackSize`).
 - Progress (`statesExplored`, `elapsedSeconds`) crosses threads via a
   small lock-backed `SearchProgress` class polled by a main-thread
   `Timer`, not raw shared-state access — the search loop runs as one

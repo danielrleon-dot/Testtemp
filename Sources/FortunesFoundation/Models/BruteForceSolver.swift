@@ -13,6 +13,12 @@ import Foundation
 /// hitting it means "inconclusive," not "unsolvable." Separate from
 /// SolitaireAI on purpose: this is a different kind of tool (exact search
 /// vs. a learned approximation), not a competing implementation of it.
+///
+/// The search is iterative (an explicit heap-allocated stack), not
+/// recursive: background DispatchQueue worker threads get a much smaller
+/// default stack than the main thread, and a hard-to-solve board can
+/// easily need thousands of moves of depth before backtracking — a
+/// straightforward recursive version overflowed that stack in practice.
 final class BruteForceSolver: ObservableObject {
     enum Status: Equatable {
         case idle
@@ -56,6 +62,13 @@ final class BruteForceSolver: ObservableObject {
         }
     }
 
+    /// One level of the explicit search stack: the board state at this
+    /// level, and the moves from it still left to try.
+    private struct Frame {
+        let snapshot: GameState.GameSnapshot
+        var remainingMoves: [Move]
+    }
+
     /// Starts an exhaustive search from `game`'s current position. Runs on
     /// a background queue against its own scratch GameState — `game`
     /// itself is only read once (via a snapshot) and never touched again.
@@ -86,34 +99,7 @@ final class BruteForceSolver: ObservableObject {
             let worker = GameState(seed: 0)
             worker.restore(snapshot)
 
-            var visited = Set<String>()
-            var path: [Move] = []
-
-            func search(_ state: GameState) -> Bool {
-                if progress.isCancelled || Date() >= deadline { return false }
-                if state.isWon { return true }
-
-                let key = self.stateKey(for: state)
-                if visited.contains(key) { return false }
-                visited.insert(key)
-                progress.incrementExplored()
-
-                for move in state.legalMoves() {
-                    let stepSnapshot = state.currentSnapshot()
-                    state.performMove(move, recordForUndo: false)
-                    path.append(move)
-
-                    if search(state) { return true }
-
-                    path.removeLast()
-                    state.restore(stepSnapshot)
-
-                    if progress.isCancelled || Date() >= deadline { return false }
-                }
-                return false
-            }
-
-            let found = search(worker)
+            let foundPath = self.iterativeSearch(from: worker, progress: progress, deadline: deadline)
             let exploredCount = progress.statesExplored
             let wasCancelled = progress.isCancelled
             let timedOut = Date() >= deadline
@@ -122,9 +108,9 @@ final class BruteForceSolver: ObservableObject {
                 self.progressTimer?.invalidate()
                 self.statesExplored = exploredCount
                 self.elapsedSeconds = Date().timeIntervalSince(startedAt)
-                if found {
-                    self.solution = path
-                    self.status = .solved(moveCount: path.count)
+                if let foundPath {
+                    self.solution = foundPath
+                    self.status = .solved(moveCount: foundPath.count)
                 } else if wasCancelled {
                     self.status = .cancelled(statesExplored: exploredCount)
                 } else if timedOut {
@@ -136,8 +122,52 @@ final class BruteForceSolver: ObservableObject {
         }
     }
 
+    /// Depth-first search with an explicit stack instead of recursion.
+    /// `worker` starts at, and is mutated throughout, but the state it's
+    /// left in when this returns is unspecified — callers only care about
+    /// the returned path. Returns nil if no win was found before running
+    /// out of moves, getting cancelled, or hitting the deadline.
+    private func iterativeSearch(from worker: GameState, progress: SearchProgress, deadline: Date) -> [Move]? {
+        var visited = Set<String>()
+        var stack: [Frame] = []
+        var path: [Move] = []
+
+        if worker.isWon { return [] }
+        visited.insert(stateKey(for: worker))
+        progress.incrementExplored()
+        stack.append(Frame(snapshot: worker.currentSnapshot(), remainingMoves: worker.legalMoves()))
+
+        while let topIndex = stack.indices.last {
+            if progress.isCancelled || Date() >= deadline { return nil }
+
+            guard !stack[topIndex].remainingMoves.isEmpty else {
+                // No moves left to try from this level — back up one level.
+                stack.removeLast()
+                if !path.isEmpty { path.removeLast() }
+                continue
+            }
+
+            let move = stack[topIndex].remainingMoves.removeLast()
+            worker.restore(stack[topIndex].snapshot)
+            guard worker.performMove(move, recordForUndo: false) else { continue }
+            path.append(move)
+
+            if worker.isWon { return path }
+
+            let key = stateKey(for: worker)
+            if visited.contains(key) {
+                path.removeLast()
+                continue
+            }
+            visited.insert(key)
+            progress.incrementExplored()
+            stack.append(Frame(snapshot: worker.currentSnapshot(), remainingMoves: worker.legalMoves()))
+        }
+        return nil
+    }
+
     /// Stops an in-progress search early. The result becomes `.cancelled`
-    /// once the current in-flight recursive call notices and unwinds.
+    /// once the search loop notices and unwinds.
     func cancel() {
         progress?.requestCancel()
     }

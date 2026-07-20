@@ -90,11 +90,16 @@ at the bottom of a tableau column, or the card sitting in the Reserve).
       higher or lower.
 - You may also drag a **run of cards** from the bottom of a column
   together, by grabbing the apparent (bottom-most) card, **provided the
-  cards being dragged are all the same colour and form a consecutive
-  rank sequence** (each adjacent to the next). Drop the whole run:
+  cards being dragged form a consecutive rank sequence** (each adjacent
+  to the next) and are **either**:
+  - all the **same colour**, or
+  - all **trumps**.
+
+  Drop the whole run:
   - onto an empty column, or
   - onto another apparent card that is one rank away from the run's
-    leading (bottom-most / apparent) card, same colour rule as above.
+    leading (bottom-most / apparent) card, following the same
+    same-colour / trumps-on-trumps rule as single-card placement.
 
 ## Open questions / assumptions to confirm
 
@@ -104,10 +109,6 @@ flag if any are wrong so this file (and the game) can be corrected:
 - "Just above or below" for stacking is read as **rank differs by
   exactly 1**, in either direction (so building runs can go up or down
   freely, unlike classic solitaire's single-direction rule).
-- A draggable multi-card run must be a **single colour** with
-  consecutive ranks; trumps are assumed **not** draggable as a multi-card
-  run (only single trumps move), since trump order isn't tied to a
-  colour run. Confirm if trump runs should also be draggable together.
 - "A free slot in the tableau" for emptying the Reserve is read as any
   **empty column** (including the middle column once it's been vacated
   again, or any column fully cleared during play).

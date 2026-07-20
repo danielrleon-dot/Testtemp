@@ -133,15 +133,22 @@ struct ContentView: View {
             Button {
                 ai.train(episodes: 200)
             } label: {
-                if ai.isTraining {
-                    ProgressView()
-                        .controlSize(.small)
-                        .frame(width: 90)
-                } else {
-                    Text("Train 200 games")
+                HStack(spacing: 6) {
+                    if ai.isTraining {
+                        ProgressView()
+                            .controlSize(.small)
+                            .tint(.white)
+                    }
+                    Text(ai.isTraining ? "Training…" : "Train 200 games")
                 }
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundColor(.white)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(ai.isTraining ? Color.gray.opacity(0.35) : Color.blue)
+                .clipShape(RoundedRectangle(cornerRadius: 6))
             }
-            .buttonStyle(.bordered)
+            .buttonStyle(.plain)
             .disabled(ai.isTraining)
 
             historyButton(title: "AI Move", systemImage: "sparkles", color: .purple, enabled: !ai.isTraining && !game.isWon) {

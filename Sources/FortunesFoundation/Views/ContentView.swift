@@ -80,7 +80,10 @@ struct ContentView: View {
         HStack(spacing: 6) {
             Text("Seed:")
                 .foregroundColor(.white.opacity(0.6))
-            Text("\(game.currentSeed)")
+            // Text(verbatim:) avoids SwiftUI's automatic locale grouping
+            // (e.g. "1,234") that a numeric string interpolation would
+            // apply — the seed needs to stay copy-pasteable as plain digits.
+            Text(verbatim: String(game.currentSeed))
                 .font(.system(.body, design: .monospaced))
                 .foregroundColor(.white.opacity(0.85))
                 .textSelection(.enabled)
@@ -89,11 +92,18 @@ struct ContentView: View {
                 .textFieldStyle(.roundedBorder)
                 .frame(width: 150)
             Button("Play Seed") {
-                guard let value = UInt64(seedInput.trimmingCharacters(in: .whitespaces)) else { return }
+                guard let value = parsedSeed else { return }
                 game.newGame(seed: value)
             }
-            .disabled(UInt64(seedInput.trimmingCharacters(in: .whitespaces)) == nil)
+            .disabled(parsedSeed == nil)
         }
+    }
+
+    /// Tolerates commas/spaces (e.g. pasted straight from the seed display,
+    /// or from a locale that groups digits) in addition to plain digits.
+    private var parsedSeed: UInt64? {
+        let cleaned = seedInput.filter { $0.isNumber }
+        return cleaned.isEmpty ? nil : UInt64(cleaned)
     }
 
     private var foundationRow: some View {

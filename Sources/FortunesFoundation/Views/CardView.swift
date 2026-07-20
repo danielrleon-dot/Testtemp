@@ -7,8 +7,12 @@ struct CardView: View {
 
     var body: some View {
         ZStack(alignment: .topLeading) {
+            // Opaque white base, then a translucent colour wash on top of it —
+            // both layered here so the card is fully opaque and never shows
+            // whatever is behind it in the rest of the app.
             RoundedRectangle(cornerRadius: 8)
-                .fill(backgroundFill)
+                .fill(Color.white)
+                .overlay(RoundedRectangle(cornerRadius: 8).fill(backgroundFill))
                 .overlay(
                     RoundedRectangle(cornerRadius: 8)
                         .stroke(borderColor, lineWidth: card.isTrump ? 2.5 : 1.5)

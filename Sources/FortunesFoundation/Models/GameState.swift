@@ -69,18 +69,25 @@ final class GameState: ObservableObject {
 
     /// Only the apparent (bottom) card of a column, or the Reserve's card,
     /// can ever be grabbed — dragging always lifts just that one card.
+    ///
+    /// Note: the card is *not* removed from its pile here. Removing it
+    /// immediately used to make SwiftUI tear down and rebuild the very
+    /// view whose gesture was mid-drag (its identity vanished from the
+    /// ForEach the instant the array changed), which killed the gesture
+    /// and dropped the card. Leaving the source untouched until the drop
+    /// actually resolves keeps that view — and its gesture — alive for
+    /// the whole gesture. The view layer hides the card in place (opacity
+    /// 0) while it's being dragged, so it doesn't appear twice.
     @discardableResult
     func beginDrag(from location: PileLocation, cardID: UUID) -> [Card]? {
         guard dragging == nil else { return nil }
         switch location {
         case .tableau(let col):
             guard let apparent = tableau[col].last, apparent.id == cardID else { return nil }
-            tableau[col].removeLast()
             dragging = DragState(source: location, cards: [apparent])
             return [apparent]
         case .reserve:
             guard let card = reserve, card.id == cardID else { return nil }
-            reserve = nil
             dragging = DragState(source: location, cards: [card])
             return [card]
         default:
@@ -95,11 +102,13 @@ final class GameState: ObservableObject {
 
         let target = targetFrames.first { $0.value.contains(point) }?.key
         if let target, target != drag.source, canPlace(cards: drag.cards, on: target) {
-            place(cards: fullPlacementGroup(for: drag, droppingOn: target), on: target)
+            let group = fullPlacementGroup(for: drag, droppingOn: target)
+            removeFromSource(group, source: drag.source)
+            place(cards: group, on: target)
             moveCount += 1
-        } else {
-            returnCards(drag.cards, to: drag.source)
         }
+        // Invalid drop (or no target at all): nothing to undo — the card
+        // never actually left its pile, so it's already back where it was.
         runFullAutoMoves()
     }
 
@@ -107,30 +116,28 @@ final class GameState: ObservableObject {
     /// alone. Dropping it onto a tableau column (empty, or landing on a
     /// matching card) pulls along whatever's left of the same-colour/
     /// trump run still sitting in the source column behind it — but only
-    /// if the player has "drag whole column" enabled.
+    /// if the player has "drag whole column" enabled. The source column
+    /// hasn't been touched yet, so this reads its current, untouched state.
     private func fullPlacementGroup(for drag: DragState, droppingOn target: PileLocation) -> [Card] {
-        guard moveWholeColumn, case .tableau(let col) = drag.source, case .tableau = target else {
+        guard moveWholeColumn, case .tableau(let col) = drag.source, case .tableau = target,
+              let apparent = tableau[col].last, apparent.id == drag.cards[0].id else {
             return drag.cards
         }
-        let draggedCard = drag.cards[0]
-        var chain = [draggedCard]
-        var idx = tableau[col].count - 1
+        var chain = [apparent]
+        var idx = tableau[col].count - 2
         while idx >= 0, isConsecutivePair(tableau[col][idx], chain.first!), sameDragGroup(tableau[col][idx], chain.first!) {
             chain.insert(tableau[col][idx], at: 0)
             idx -= 1
         }
-        if chain.count > 1 {
-            tableau[col].removeLast(chain.count - 1)
-        }
         return chain
     }
 
-    private func returnCards(_ cards: [Card], to source: PileLocation) {
+    private func removeFromSource(_ cards: [Card], source: PileLocation) {
         switch source {
         case .tableau(let col):
-            tableau[col].append(contentsOf: cards)
+            tableau[col].removeLast(cards.count)
         case .reserve:
-            reserve = cards.first
+            reserve = nil
         default:
             break
         }

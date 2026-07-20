@@ -20,12 +20,17 @@ struct TableauColumnView: View {
                 CardView(card: card)
                     .offset(y: CGFloat(index) * overlap)
                     .zIndex(Double(index))
+                    .opacity(isBeingDragged(card) ? 0 : 1)
                     .gesture(dragGesture(for: card.id), including: isApparent ? .all : .none)
             }
         }
         .frame(width: cardWidth, alignment: .top)
         .frame(minHeight: cardHeight + CGFloat(max(column.count - 1, 0)) * overlap, alignment: .top)
         .reportFrame(.tableau(columnIndex))
+    }
+
+    private func isBeingDragged(_ card: Card) -> Bool {
+        game.dragging?.source == .tableau(columnIndex) && game.dragging?.cards.first?.id == card.id
     }
 
     /// Only the apparent (bottom) card is ever a valid drag handle — see

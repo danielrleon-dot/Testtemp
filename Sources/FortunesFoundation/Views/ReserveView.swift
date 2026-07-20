@@ -11,6 +11,7 @@ struct ReserveView: View {
                     .frame(width: 74, height: 100)
                 if let card = game.reserve {
                     CardView(card: card)
+                        .opacity(game.dragging?.source == .reserve ? 0 : 1)
                         .gesture(dragGesture(for: card.id))
                 } else {
                     Text("Reserve")

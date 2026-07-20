@@ -102,6 +102,19 @@ foundation slots — no matter where it lands.
     leading (bottom-most / apparent) card, following the same
     same-colour / trumps-on-trumps rule as single-card placement.
 
+  **Dragging a run is not its own move — it's a shortcut for doing the
+  single-card move above once per card, in sequence, starting from the
+  apparent card.** That has a real consequence for how the run lands: the
+  apparent card (the one you grabbed, and the only one actually checked
+  against the destination) is placed *first*, so it ends up at the
+  *bottom* of the new stack; each card above it in the original column
+  then lands on top of the previous one, in order. The net effect is that
+  the run is **inverted** at the destination — the card that was the
+  apparent/bottom card of the source column becomes buried at the bottom
+  of the destination stack, and the card that was at the *far* (top,
+  most-buried) end of the dragged run becomes the new apparent card at
+  the destination.
+
 ## Open questions / assumptions to confirm
 
 These are implementation assumptions made while transcribing the rules —

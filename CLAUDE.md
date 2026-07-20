@@ -36,7 +36,11 @@ Key shape of the ruleset (see RULES.md for the authoritative version):
   (never mid-drag), regardless of which pile the dragged card lands in.
   Colour auto-moves are additionally suspended while the Reserve is
   occupied.
-- Same-colour or all-trump consecutive-rank runs can be dragged together.
+- Same-colour or all-trump consecutive-rank runs can be dragged together
+  — but this is just shorthand for moving each card one at a time
+  starting from the apparent card, so the run **inverts** at the
+  destination (the apparent/grabbed card ends up buried at the bottom of
+  the new stack; the far end of the run becomes the new apparent card).
 
 ## Status / important caveat
 

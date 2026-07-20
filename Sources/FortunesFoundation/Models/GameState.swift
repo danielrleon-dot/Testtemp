@@ -184,7 +184,13 @@ final class GameState: ObservableObject {
         case .colourFoundation(let colour):
             colourFoundations[colour, default: []].append(contentsOf: cards)
         case .tableau(let col):
-            tableau[col].append(contentsOf: cards)
+            // Dragging a multi-card run is shorthand for moving each card
+            // one at a time, starting from the apparent (grabbed) card —
+            // it's not a distinct move of its own. So the apparent card
+            // (cards.last) lands first/deepest, and the run's far end
+            // (cards.first) ends up as the new apparent card on top.
+            // A single-card "run" is unaffected: reversing one element is a no-op.
+            tableau[col].append(contentsOf: cards.reversed())
         }
     }
 

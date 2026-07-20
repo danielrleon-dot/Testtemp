@@ -16,10 +16,11 @@ struct TableauColumnView: View {
                 .frame(width: cardWidth, height: cardHeight)
 
             ForEach(Array(column.enumerated()), id: \.element.id) { index, card in
+                let isApparent = index == column.count - 1
                 CardView(card: card)
                     .offset(y: CGFloat(index) * overlap)
                     .zIndex(Double(index))
-                    .gesture(dragGesture(for: card.id))
+                    .gesture(dragGesture(for: card.id), including: isApparent ? .all : .none)
             }
         }
         .frame(width: cardWidth, alignment: .top)
@@ -27,9 +28,9 @@ struct TableauColumnView: View {
         .reportFrame(.tableau(columnIndex))
     }
 
-    /// Every card in the column gets a gesture — beginDrag decides whether
-    /// grabbing this particular card is even a valid pickup (see RULES.md:
-    /// only the apparent card or the top of a matching run can be dragged).
+    /// Only the apparent (bottom) card is ever a valid drag handle — see
+    /// RULES.md: whether the rest of a matching run follows is decided by
+    /// where this single card gets dropped, not by which card you grab.
     private func dragGesture(for cardID: UUID) -> some Gesture {
         DragGesture(minimumDistance: 2, coordinateSpace: .named("board"))
             .onChanged { value in

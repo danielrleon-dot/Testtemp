@@ -61,19 +61,25 @@ final class GameState: ObservableObject {
 
     // MARK: - Drag lifecycle
 
+    /// Only the apparent (bottom) card of a column, or the Reserve's card,
+    /// can ever be grabbed — dragging always lifts just that one card.
     @discardableResult
     func beginDrag(from location: PileLocation, cardID: UUID) -> [Card]? {
-        guard dragging == nil, let run = draggableRun(from: location, cardID: cardID) else { return nil }
+        guard dragging == nil else { return nil }
         switch location {
         case .tableau(let col):
-            tableau[col].removeLast(run.count)
+            guard let apparent = tableau[col].last, apparent.id == cardID else { return nil }
+            tableau[col].removeLast()
+            dragging = DragState(source: location, cards: [apparent])
+            return [apparent]
         case .reserve:
+            guard let card = reserve, card.id == cardID else { return nil }
             reserve = nil
+            dragging = DragState(source: location, cards: [card])
+            return [card]
         default:
             return nil
         }
-        dragging = DragState(source: location, cards: run)
-        return run
     }
 
     func endDrag(at point: CGPoint) {
@@ -83,12 +89,33 @@ final class GameState: ObservableObject {
 
         let target = targetFrames.first { $0.value.contains(point) }?.key
         if let target, target != drag.source, canPlace(cards: drag.cards, on: target) {
-            place(cards: drag.cards, on: target)
+            place(cards: fullPlacementGroup(for: drag, droppingOn: target), on: target)
             moveCount += 1
         } else {
             returnCards(drag.cards, to: drag.source)
         }
         runFullAutoMoves()
+    }
+
+    /// Dropping the dragged card onto the Reserve always sends it there
+    /// alone. Dropping it onto a tableau column (empty, or landing on a
+    /// matching card) pulls along whatever's left of the same-colour/
+    /// trump run still sitting in the source column behind it.
+    private func fullPlacementGroup(for drag: DragState, droppingOn target: PileLocation) -> [Card] {
+        guard case .tableau(let col) = drag.source, case .tableau = target else {
+            return drag.cards
+        }
+        let draggedCard = drag.cards[0]
+        var chain = [draggedCard]
+        var idx = tableau[col].count - 1
+        while idx >= 0, isConsecutivePair(tableau[col][idx], chain.first!), sameDragGroup(tableau[col][idx], chain.first!) {
+            chain.insert(tableau[col][idx], at: 0)
+            idx -= 1
+        }
+        if chain.count > 1 {
+            tableau[col].removeLast(chain.count - 1)
+        }
+        return chain
     }
 
     private func returnCards(_ cards: [Card], to source: PileLocation) {
@@ -103,38 +130,6 @@ final class GameState: ObservableObject {
     }
 
     // MARK: - Drag validation
-
-    /// Which card you grab determines what moves: the apparent (bottom)
-    /// card always takes just itself; the card at the top of the matching
-    /// run takes the whole run with it; grabbing anything in between (or
-    /// an unrelated buried card) isn't a valid grab at all.
-    private func draggableRun(from location: PileLocation, cardID: UUID) -> [Card]? {
-        switch location {
-        case .reserve:
-            guard let card = reserve, card.id == cardID else { return nil }
-            return [card]
-        case .tableau(let col):
-            let column = tableau[col]
-            guard let apparent = column.last else { return nil }
-
-            var chain = [apparent]
-            var idx = column.count - 2
-            while idx >= 0, isConsecutivePair(column[idx], chain.first!), sameDragGroup(column[idx], chain.first!) {
-                chain.insert(column[idx], at: 0)
-                idx -= 1
-            }
-
-            if cardID == apparent.id {
-                return [apparent]
-            } else if cardID == chain.first!.id, chain.count > 1 {
-                return chain
-            } else {
-                return nil
-            }
-        default:
-            return nil
-        }
-    }
 
     private func isConsecutivePair(_ a: Card, _ b: Card) -> Bool {
         abs(a.rankValue - b.rankValue) == 1

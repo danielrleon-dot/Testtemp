@@ -80,56 +80,42 @@ foundation slots — no matter where it lands.
 
 ## Manual moves (dragging)
 
-### What grabbing a card picks up
+### You only ever grab the bottom card
 
-A column may hold a **run**: a chain of consecutive-rank cards, either all
-the same colour or all trumps, ending at the apparent card. Which exact
-card you grab determines what moves:
+**You can only drag the apparent (bottom-most) card of a column, or the
+card in the Reserve.** Grabbing anything else — a card in the middle of
+the column, or anywhere that isn't the apparent card — isn't a valid
+grab; nothing happens. There's no way to grab "further up" a column to
+pick up more than one card at once — what actually moves is decided by
+**where you drop it**, not by what you grabbed.
 
-- Grabbing the **apparent (bottom-most) card** of a column, or the card
-  in the **Reserve**, always picks up **just that one card** — even if
-  it's part of a longer run.
-- Grabbing the card at the **top of a run** (the far end of the chain,
-  i.e. the first card of the run, the one furthest from the apparent
-  card) picks up **the whole run together**, down through the apparent
-  card.
-- Grabbing **any other card** — one in the middle of a run, or a buried
-  card that isn't part of one — **isn't a valid grab**; nothing happens.
+### Where it can be dropped, and what comes with it
 
-If the apparent card doesn't chain with anything above it, it has no run
-of its own — the "top of the run" and "the apparent card" are the same
-card, and grabbing it always just takes that single card.
+- Drop the card onto the **Reserve** (only possible if it's empty): the
+  card goes there **alone**. Nothing else from its column follows, even
+  if it was sitting on top of a matching run.
+- Drop the card onto an **empty tableau column**, or **on top of another
+  apparent card that's the same kind and exactly one rank away** ("just
+  above or below" — a colour card onto the same colour, a trump onto
+  another trump):
+  - The dragged card is placed there.
+  - **Then the rest of the column follows**: whatever run of
+    consecutive-rank, same-colour-or-all-trump cards was sitting
+    directly behind the dragged card (still in its original column) gets
+    pulled along automatically and stacked on top of it, in order — as
+    if you'd dragged each of them there yourself, one at a time, right
+    after the first.
+  - If nothing behind it chains that way, only the single card moves.
+- The foundation slots only ever accept a single card, and only the
+  dragged card itself — never anything following behind it.
 
-### Where it can be dropped
+### This inverts the run at the destination
 
-- A single card (or a run) may be dropped:
-  - onto an **empty tableau column** (any card, or any run, may go
-    there), or
-  - **on top of another apparent card**, if that target card is of the
-    same kind and **exactly one rank away** ("just above or below") from
-    the card you grabbed:
-    - a **colour card** can only be placed on another card of the
-      **same colour**, one rank higher or lower.
-    - a **trump** can only be placed on another **trump**, one number
-      higher or lower.
-  - The Reserve and the foundation slots only ever accept a **single**
-    card, never a run.
-
-### Dragging a run inverts it
-
-**Dragging a run is not its own move — it's a shortcut for doing the
-single-card move above once per card, in sequence, starting from the
-apparent card** (which is why only the apparent card and the top of the
-run are valid grab points: those are the two ends a real one-by-one move
-would start from). That has a real consequence for how the run lands: the
-apparent card is placed *first* against the destination, so it ends up at
-the *bottom* of the new stack; each card above it in the original column
-then lands on top of the previous one, in order. The net effect is that
-the run is **inverted** at the destination — the card that was the
-apparent/bottom card of the source column becomes buried at the bottom
-of the destination stack, and the card that was at the top of the run
-(the one you actually grabbed to move the whole thing) becomes the new
-apparent card at the destination.
+Since the dragged card lands first and the rest of its old run follows
+on top of it one at a time, **the run ends up inverted at the
+destination**: the card you actually dragged ends up buried at the
+bottom of the new stack, and whatever card was furthest from it in the
+original column (the "top" of that run) becomes the new apparent card.
 
 ## Open questions / assumptions to confirm
 
@@ -142,3 +128,9 @@ flag if any are wrong so this file (and the game) can be corrected:
 - "A free slot in the tableau" for emptying the Reserve is read as any
   **empty column** (including the middle column once it's been vacated
   again, or any column fully cleared during play).
+- Dropping onto an **empty column** is treated the same as dropping onto
+  a matching apparent card: the rest of the run follows. Only dropping
+  onto the **Reserve** was explicitly called out as sending the card
+  there alone (because the Reserve can only ever hold one card) — confirm
+  whether an empty column should instead behave like the Reserve (dragged
+  card only, run left behind).

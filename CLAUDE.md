@@ -36,14 +36,13 @@ Key shape of the ruleset (see RULES.md for the authoritative version):
   (never mid-drag), regardless of which pile the dragged card lands in.
   Colour auto-moves are additionally suspended while the Reserve is
   occupied.
-- Same-colour or all-trump consecutive-rank runs can be dragged together
-  — but only by grabbing the card at the *top* of the run; grabbing the
-  apparent card always takes just that one card, and grabbing anything
-  else in the middle of a run isn't a valid grab at all. This is just
-  shorthand for moving each card one at a time starting from the
-  apparent card, so the run **inverts** at the destination (the apparent
-  card ends up buried at the bottom of the new stack; the top-of-run card
-  you grabbed becomes the new apparent card).
+- Only the apparent (bottom) card of a column, or the Reserve's card, can
+  ever be grabbed — never a card further up. Whether the rest of a
+  matching same-colour/all-trump run follows is decided by **where it's
+  dropped**: onto the Reserve, it goes alone; onto an empty column or a
+  matching card, the rest of the run tags along, landing **inverted**
+  (the dragged card ends up buried at the bottom of the new stack; the
+  far end of the run becomes the new apparent card).
 
 ## Status / important caveat
 

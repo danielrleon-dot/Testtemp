@@ -25,15 +25,14 @@ swift run
 
 ## Playing
 
-- Drag the exposed (bottom-most) card of any tableau column, or the card in
-  the Reserve, onto another card one rank away of the same colour (or
-  another trump one number away), or onto an empty column. Grabbing the
-  bottom card always moves just that one card.
-- If several cards at the bottom of a column form a same-colour or
-  all-trump consecutive-rank run, grab the card at the *top* of that run
-  (not the bottom one) to drag the whole run together — it lands
-  inverted, with the card you grabbed becoming the new exposed card.
-  Grabbing a card in the middle of a run does nothing.
+- You can only drag the exposed (bottom-most) card of a tableau column, or
+  the card in the Reserve — never a card further up a column.
+- Drop it onto the Reserve and it moves **alone**. Drop it onto an empty
+  column, or onto another card one rank away of the same colour (or
+  another trump one number away), and **the rest of the run behind it
+  follows automatically** — landing inverted, with the card you dragged
+  ending up buried at the bottom and the far end of the run becoming the
+  new exposed card.
 - Trump 0 and 21, and any trump that's the next needed card for either
   trump foundation, auto-move there once a drag ends — never mid-drag.
   Colour cards auto-move the same way, but never while a card sits in the

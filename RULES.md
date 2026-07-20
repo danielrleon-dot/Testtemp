@@ -92,30 +92,44 @@ pick up more than one card at once — what actually moves is decided by
 ### Where it can be dropped, and what comes with it
 
 - Drop the card onto the **Reserve** (only possible if it's empty): the
-  card goes there **alone**. Nothing else from its column follows, even
-  if it was sitting on top of a matching run.
+  card **always** goes there alone, regardless of the option below —
+  nothing else from its column ever follows it onto the Reserve, since
+  the Reserve can only ever hold one card.
 - Drop the card onto an **empty tableau column**, or **on top of another
   apparent card that's the same kind and exactly one rank away** ("just
   above or below" — a colour card onto the same colour, a trump onto
-  another trump):
-  - The dragged card is placed there.
-  - **Then the rest of the column follows**: whatever run of
-    consecutive-rank, same-colour-or-all-trump cards was sitting
-    directly behind the dragged card (still in its original column) gets
-    pulled along automatically and stacked on top of it, in order — as
-    if you'd dragged each of them there yourself, one at a time, right
-    after the first.
-  - If nothing behind it chains that way, only the single card moves.
+  another trump): the dragged card is placed there, and then — **only if
+  the "drag whole column" option is turned on** — the rest of the run
+  behind it follows too (see below). With the option off, only the
+  single dragged card ever moves, no matter what's behind it.
 - The foundation slots only ever accept a single card, and only the
   dragged card itself — never anything following behind it.
 
+### "Drag whole column" option
+
+The player can tick a **"drag whole column"** option (a checkbox in the
+game's toolbar). It changes what happens once the dragged card is
+successfully placed on a tableau column:
+
+- **Off** (default): only the single card you dragged ever moves.
+- **On**: whatever run of consecutive-rank, same-colour-or-all-trump
+  cards was sitting directly behind the dragged card (still in its
+  original column) gets pulled along automatically and stacked on top of
+  it, in order — as if you'd dragged each of them there yourself, one at
+  a time, right after the first. If nothing behind it chains that way,
+  only the single card moves regardless.
+
+This option only affects tableau destinations — dropping onto the
+Reserve always takes the single card alone either way.
+
 ### This inverts the run at the destination
 
-Since the dragged card lands first and the rest of its old run follows
-on top of it one at a time, **the run ends up inverted at the
-destination**: the card you actually dragged ends up buried at the
-bottom of the new stack, and whatever card was furthest from it in the
-original column (the "top" of that run) becomes the new apparent card.
+When the whole-column option pulls a run along, the dragged card lands
+first and the rest of its old run follows on top of it one at a time, so
+**the run ends up inverted at the destination**: the card you actually
+dragged ends up buried at the bottom of the new stack, and whatever card
+was furthest from it in the original column (the "top" of that run)
+becomes the new apparent card.
 
 ## Open questions / assumptions to confirm
 
@@ -128,9 +142,5 @@ flag if any are wrong so this file (and the game) can be corrected:
 - "A free slot in the tableau" for emptying the Reserve is read as any
   **empty column** (including the middle column once it's been vacated
   again, or any column fully cleared during play).
-- Dropping onto an **empty column** is treated the same as dropping onto
-  a matching apparent card: the rest of the run follows. Only dropping
-  onto the **Reserve** was explicitly called out as sending the card
-  there alone (because the Reserve can only ever hold one card) — confirm
-  whether an empty column should instead behave like the Reserve (dragged
-  card only, run left behind).
+- The "drag whole column" option defaults to **off** — confirm that's the
+  right default (vs. defaulting on).

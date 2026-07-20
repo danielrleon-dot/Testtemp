@@ -42,6 +42,9 @@ struct ContentView: View {
             Spacer()
             Text("Moves: \(game.moveCount)")
                 .foregroundColor(.white.opacity(0.7))
+            Toggle("Drag whole column", isOn: $game.moveWholeColumn)
+                .toggleStyle(.checkbox)
+                .foregroundColor(.white.opacity(0.85))
             Button("New Game") { game.newGame() }
                 .buttonStyle(.borderedProminent)
         }

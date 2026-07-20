@@ -37,12 +37,14 @@ Key shape of the ruleset (see RULES.md for the authoritative version):
   Colour auto-moves are additionally suspended while the Reserve is
   occupied.
 - Only the apparent (bottom) card of a column, or the Reserve's card, can
-  ever be grabbed — never a card further up. Whether the rest of a
-  matching same-colour/all-trump run follows is decided by **where it's
-  dropped**: onto the Reserve, it goes alone; onto an empty column or a
-  matching card, the rest of the run tags along, landing **inverted**
-  (the dragged card ends up buried at the bottom of the new stack; the
-  far end of the run becomes the new apparent card).
+  ever be grabbed — never a card further up. Dropping onto the Reserve
+  always takes that one card alone. Dropping onto a tableau column (empty
+  or a matching card) additionally pulls the rest of the matching
+  same-colour/all-trump run along behind it, landing **inverted** (the
+  dragged card ends up buried at the bottom of the new stack; the far end
+  of the run becomes the new apparent card) — but only if the player has
+  the **"drag whole column"** checkbox (`GameState.moveWholeColumn`,
+  default off) turned on. With it off, every drag moves a single card.
 
 ## Status / important caveat
 

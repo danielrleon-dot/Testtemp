@@ -24,6 +24,12 @@ final class GameState: ObservableObject {
     @Published var moveCount: Int = 0
     @Published var isWon: Bool = false
 
+    /// Player-facing option: when true, dropping the dragged card onto a
+    /// tableau column also pulls along the rest of the matching run behind
+    /// it (inverted); when false, dragging always moves that one card
+    /// alone. Not reset by newGame() — it's a play-style preference.
+    @Published var moveWholeColumn: Bool = false
+
     struct DragState {
         let source: PileLocation
         let cards: [Card]
@@ -100,9 +106,10 @@ final class GameState: ObservableObject {
     /// Dropping the dragged card onto the Reserve always sends it there
     /// alone. Dropping it onto a tableau column (empty, or landing on a
     /// matching card) pulls along whatever's left of the same-colour/
-    /// trump run still sitting in the source column behind it.
+    /// trump run still sitting in the source column behind it — but only
+    /// if the player has "drag whole column" enabled.
     private func fullPlacementGroup(for drag: DragState, droppingOn target: PileLocation) -> [Card] {
-        guard case .tableau(let col) = drag.source, case .tableau = target else {
+        guard moveWholeColumn, case .tableau(let col) = drag.source, case .tableau = target else {
             return drag.cards
         }
         let draggedCard = drag.cards[0]

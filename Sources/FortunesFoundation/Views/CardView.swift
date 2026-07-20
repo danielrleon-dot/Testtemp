@@ -36,16 +36,20 @@ struct CardView: View {
                 .padding(.vertical, 6)
                 .padding(.leading, 4)
 
-            VStack(alignment: .leading, spacing: 0) {
-                Text(rankText)
-                    .font(.system(size: 20, weight: .heavy, design: .rounded))
-                    .foregroundColor(labelColor)
-                Text(symbolText)
-                    .font(.system(size: 15, weight: .bold))
-                    .foregroundColor(labelColor)
-            }
-            .padding(.top, 5)
-            .padding(.leading, 15)
+            Text(rankText)
+                .font(.system(size: 20, weight: .heavy, design: .rounded))
+                .foregroundColor(labelColor)
+                .padding(.top, 5)
+                .padding(.leading, 15)
+
+            // Suit symbol on the right edge, in the same top sliver that
+            // stays visible when another card overlaps this one from below.
+            Text(symbolText)
+                .font(.system(size: 17, weight: .bold))
+                .foregroundColor(labelColor)
+                .frame(maxWidth: .infinity, alignment: .trailing)
+                .padding(.top, 8)
+                .padding(.trailing, 8)
         }
         .frame(width: width, height: height)
     }

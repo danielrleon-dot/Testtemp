@@ -80,40 +80,56 @@ foundation slots — no matter where it lands.
 
 ## Manual moves (dragging)
 
-- You may drag the apparent card of any column, or the card in the
-  Reserve, to:
-  - an **empty tableau column** (any card may go there), or
+### What grabbing a card picks up
+
+A column may hold a **run**: a chain of consecutive-rank cards, either all
+the same colour or all trumps, ending at the apparent card. Which exact
+card you grab determines what moves:
+
+- Grabbing the **apparent (bottom-most) card** of a column, or the card
+  in the **Reserve**, always picks up **just that one card** — even if
+  it's part of a longer run.
+- Grabbing the card at the **top of a run** (the far end of the chain,
+  i.e. the first card of the run, the one furthest from the apparent
+  card) picks up **the whole run together**, down through the apparent
+  card.
+- Grabbing **any other card** — one in the middle of a run, or a buried
+  card that isn't part of one — **isn't a valid grab**; nothing happens.
+
+If the apparent card doesn't chain with anything above it, it has no run
+of its own — the "top of the run" and "the apparent card" are the same
+card, and grabbing it always just takes that single card.
+
+### Where it can be dropped
+
+- A single card (or a run) may be dropped:
+  - onto an **empty tableau column** (any card, or any run, may go
+    there), or
   - **on top of another apparent card**, if that target card is of the
-    same kind and **exactly one rank away** ("just above or below"):
+    same kind and **exactly one rank away** ("just above or below") from
+    the card you grabbed:
     - a **colour card** can only be placed on another card of the
       **same colour**, one rank higher or lower.
     - a **trump** can only be placed on another **trump**, one number
       higher or lower.
-- You may also drag a **run of cards** from the bottom of a column
-  together, by grabbing the apparent (bottom-most) card, **provided the
-  cards being dragged form a consecutive rank sequence** (each adjacent
-  to the next) and are **either**:
-  - all the **same colour**, or
-  - all **trumps**.
+  - The Reserve and the foundation slots only ever accept a **single**
+    card, never a run.
 
-  Drop the whole run:
-  - onto an empty column, or
-  - onto another apparent card that is one rank away from the run's
-    leading (bottom-most / apparent) card, following the same
-    same-colour / trumps-on-trumps rule as single-card placement.
+### Dragging a run inverts it
 
-  **Dragging a run is not its own move — it's a shortcut for doing the
-  single-card move above once per card, in sequence, starting from the
-  apparent card.** That has a real consequence for how the run lands: the
-  apparent card (the one you grabbed, and the only one actually checked
-  against the destination) is placed *first*, so it ends up at the
-  *bottom* of the new stack; each card above it in the original column
-  then lands on top of the previous one, in order. The net effect is that
-  the run is **inverted** at the destination — the card that was the
-  apparent/bottom card of the source column becomes buried at the bottom
-  of the destination stack, and the card that was at the *far* (top,
-  most-buried) end of the dragged run becomes the new apparent card at
-  the destination.
+**Dragging a run is not its own move — it's a shortcut for doing the
+single-card move above once per card, in sequence, starting from the
+apparent card** (which is why only the apparent card and the top of the
+run are valid grab points: those are the two ends a real one-by-one move
+would start from). That has a real consequence for how the run lands: the
+apparent card is placed *first* against the destination, so it ends up at
+the *bottom* of the new stack; each card above it in the original column
+then lands on top of the previous one, in order. The net effect is that
+the run is **inverted** at the destination — the card that was the
+apparent/bottom card of the source column becomes buried at the bottom
+of the destination stack, and the card that was at the top of the run
+(the one you actually grabbed to move the whole thing) becomes the new
+apparent card at the destination.
 
 ## Open questions / assumptions to confirm
 

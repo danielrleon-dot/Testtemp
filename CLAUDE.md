@@ -37,10 +37,13 @@ Key shape of the ruleset (see RULES.md for the authoritative version):
   Colour auto-moves are additionally suspended while the Reserve is
   occupied.
 - Same-colour or all-trump consecutive-rank runs can be dragged together
-  — but this is just shorthand for moving each card one at a time
-  starting from the apparent card, so the run **inverts** at the
-  destination (the apparent/grabbed card ends up buried at the bottom of
-  the new stack; the far end of the run becomes the new apparent card).
+  — but only by grabbing the card at the *top* of the run; grabbing the
+  apparent card always takes just that one card, and grabbing anything
+  else in the middle of a run isn't a valid grab at all. This is just
+  shorthand for moving each card one at a time starting from the
+  apparent card, so the run **inverts** at the destination (the apparent
+  card ends up buried at the bottom of the new stack; the top-of-run card
+  you grabbed becomes the new apparent card).
 
 ## Status / important caveat
 

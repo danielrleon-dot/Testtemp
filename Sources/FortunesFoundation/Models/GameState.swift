@@ -62,8 +62,8 @@ final class GameState: ObservableObject {
     // MARK: - Drag lifecycle
 
     @discardableResult
-    func beginDrag(from location: PileLocation) -> [Card]? {
-        guard dragging == nil, let run = draggableRun(from: location) else { return nil }
+    func beginDrag(from location: PileLocation, cardID: UUID) -> [Card]? {
+        guard dragging == nil, let run = draggableRun(from: location, cardID: cardID) else { return nil }
         switch location {
         case .tableau(let col):
             tableau[col].removeLast(run.count)
@@ -104,22 +104,33 @@ final class GameState: ObservableObject {
 
     // MARK: - Drag validation
 
-    private func draggableRun(from location: PileLocation) -> [Card]? {
+    /// Which card you grab determines what moves: the apparent (bottom)
+    /// card always takes just itself; the card at the top of the matching
+    /// run takes the whole run with it; grabbing anything in between (or
+    /// an unrelated buried card) isn't a valid grab at all.
+    private func draggableRun(from location: PileLocation, cardID: UUID) -> [Card]? {
         switch location {
         case .reserve:
-            guard let card = reserve else { return nil }
+            guard let card = reserve, card.id == cardID else { return nil }
             return [card]
         case .tableau(let col):
-            var remaining = tableau[col]
-            guard let apparent = remaining.popLast() else { return nil }
-            var run = [apparent]
-            while let candidate = remaining.last,
-                  isConsecutivePair(candidate, run.first!),
-                  sameDragGroup(candidate, run.first!) {
-                run.insert(candidate, at: 0)
-                remaining.removeLast()
+            let column = tableau[col]
+            guard let apparent = column.last else { return nil }
+
+            var chain = [apparent]
+            var idx = column.count - 2
+            while idx >= 0, isConsecutivePair(column[idx], chain.first!), sameDragGroup(column[idx], chain.first!) {
+                chain.insert(column[idx], at: 0)
+                idx -= 1
             }
-            return run
+
+            if cardID == apparent.id {
+                return [apparent]
+            } else if cardID == chain.first!.id, chain.count > 1 {
+                return chain
+            } else {
+                return nil
+            }
         default:
             return nil
         }

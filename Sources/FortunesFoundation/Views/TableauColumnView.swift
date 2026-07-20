@@ -16,11 +16,10 @@ struct TableauColumnView: View {
                 .frame(width: cardWidth, height: cardHeight)
 
             ForEach(Array(column.enumerated()), id: \.element.id) { index, card in
-                let isApparent = index == column.count - 1
                 CardView(card: card)
                     .offset(y: CGFloat(index) * overlap)
                     .zIndex(Double(index))
-                    .gesture(dragGesture, including: isApparent ? .all : .none)
+                    .gesture(dragGesture(for: card.id))
             }
         }
         .frame(width: cardWidth, alignment: .top)
@@ -28,11 +27,14 @@ struct TableauColumnView: View {
         .reportFrame(.tableau(columnIndex))
     }
 
-    private var dragGesture: some Gesture {
+    /// Every card in the column gets a gesture — beginDrag decides whether
+    /// grabbing this particular card is even a valid pickup (see RULES.md:
+    /// only the apparent card or the top of a matching run can be dragged).
+    private func dragGesture(for cardID: UUID) -> some Gesture {
         DragGesture(minimumDistance: 2, coordinateSpace: .named("board"))
             .onChanged { value in
                 if game.dragging == nil {
-                    game.beginDrag(from: .tableau(columnIndex))
+                    game.beginDrag(from: .tableau(columnIndex), cardID: cardID)
                 }
                 game.dragPoint = value.location
             }

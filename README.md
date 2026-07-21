@@ -118,8 +118,9 @@ empty search space proves no solution exists either way.
   database (see "Train from Puzzles" below) — solving is itself how you
   build up training data for the AI. Each solved puzzle is tagged with
   the rules version it was solved under; if `RULES.md` ever changes,
-  older puzzles stop counting as trainable (see below) rather than
-  quietly teaching the AI an outdated game.
+  puzzles solved under the old rules are permanently discarded the next
+  time the app launches, rather than quietly teaching the AI an outdated
+  game.
 
 ## AI
 
@@ -137,20 +138,19 @@ The "AI" row has a self-play reinforcement-learning agent:
 - **AI Move** applies the AI's current best move to *your* game, once,
   using whatever it's learned so far (no further training from this).
 - **Train from Puzzles** trains from every puzzle the Solver has proven
-  winnable *under the current rules* (stored on disk, count shown next to
-  the button) — supervised learning from real, known wins rather than
-  self-play guesswork. Each solved path is replayed and trained on
-  backward from the win, so every step's target value is an exact
-  computed return instead of a self-play estimate. This is a *much*
-  stronger signal than self-play, so solving even a handful of puzzles
-  and training from them is worth trying before judging the AI's
-  strength. Complements self-play rather than replacing it — the two
-  share the same underlying weights, and can both keep contributing over
-  time as you solve more puzzles. If `RULES.md` has changed since some
-  puzzles were solved, the count next to the button calls those out
-  separately (e.g. "12 solved puzzles (3 stale, pre-rules-change)") —
-  they stay on disk but are excluded from training until/unless
-  re-solved, since their moves may no longer even be legal.
+  winnable (stored on disk, count shown next to the button) — supervised
+  learning from real, known wins rather than self-play guesswork. Each
+  solved path is replayed and trained on backward from the win, so every
+  step's target value is an exact computed return instead of a self-play
+  estimate. This is a *much* stronger signal than self-play, so solving
+  even a handful of puzzles and training from them is worth trying before
+  judging the AI's strength. Complements self-play rather than replacing
+  it — the two share the same underlying weights, and can both keep
+  contributing over time as you solve more puzzles. If `RULES.md` ever
+  changes, puzzles solved under the old rules are dropped from this count
+  (and the file on disk) automatically the next time the app launches,
+  since their moves may no longer even be legal — you'd need to re-solve
+  them under the new rules to get that training data back.
 - Expect **modest** results from self-play alone, especially before much
   training — this is a genuine but simple learner, not a solver (that's
   what the Solver above is for). It should trend toward better foundation

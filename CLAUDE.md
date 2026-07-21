@@ -221,21 +221,23 @@ it. `GameState.GameSnapshot`, `PileLocation`, and `Move` are all `Codable`
 specifically to support this persistence.
 
 Every record is stamped with the `GameState.rulesVersion` in effect when
-it was solved. `PuzzleDatabase.validRecords` filters to only records whose
-`rulesVersion` matches the *current* `GameState.rulesVersion` — that's
-what `trainFromSolvedPuzzles` and the "Train from Puzzles" button actually
-use, not the raw `records` array. A record stamped with an older version
-predates a rules change: its move sequence might not even replay legally
-anymore, and even where it happens to, it no longer reflects how the game
-is actually played, so training on it would actively teach the AI stale
-behaviour rather than just being a missed opportunity. Stale records are
-never deleted (`PuzzleDatabase.staleRecordCount` surfaces the count in the
-UI instead) — they're evidence of real solved work, just not safe to
-learn from until/unless someone confirms they still apply. Records
-persisted before this versioning existed decode with `rulesVersion == 0`
+it was solved. `PuzzleDatabase.load()` filters the decoded file down to
+only records whose `rulesVersion` matches the *current*
+`GameState.rulesVersion`, and — if that dropped anything — immediately
+calls `save()` to rewrite the file without them, so `records` (what
+`trainFromSolvedPuzzles`, the "Train from Puzzles" button, and the
+solved-puzzle count in the UI all read) never mixes puzzles solved under
+different rulesets. This is a deliberate prune-on-load, not a "keep but
+hide" filter: a record stamped with an older version predates a rules
+change, its move sequence might not even replay legally anymore, and even
+where it happens to, it no longer reflects how the game is actually
+played — so it's discarded outright the next time the app launches and
+opens the file, rather than lingering on disk. Records persisted before
+this versioning existed decode with `rulesVersion == 0`
 (`SolvedPuzzleRecord.init(from:)`), which can never match a real
-`GameState.rulesVersion` (starts at 1), so old databases degrade to "all
-stale" rather than crashing on load or silently passing as current.
+`GameState.rulesVersion` (starts at 1), so old databases get pruned to
+empty on first load under the new code rather than crashing or silently
+passing as current.
 
 ## Status / important caveat
 

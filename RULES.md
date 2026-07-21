@@ -6,9 +6,11 @@ whenever a change here changes what's legal or how the board behaves
 (anything other than wording/typo fixes) — the game stamps every solved
 puzzle it saves with this number, and uses a mismatch to tell "solved
 under the current rules" apart from "solved under rules that no longer
-apply," so a stale puzzle database doesn't silently corrupt AI training.
-See `GameState.rulesVersion`'s doc comment and `PuzzleDatabase.
-validRecords` for how that's used.
+apply," so a stale puzzle database doesn't silently corrupt AI training —
+`PuzzleDatabase` prunes and permanently discards any solved puzzle
+stamped with an old version the next time the app launches. See
+`GameState.rulesVersion`'s doc comment and `PuzzleDatabase.load()` for
+how that's used.
 
 This file is the single source of truth for the game's rules. Edit it
 whenever the rules change — the app should be kept in sync with whatever

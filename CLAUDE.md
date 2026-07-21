@@ -197,9 +197,25 @@ cancellation, undo-tracked playback):
 Both are exhaustive if run to completion — an empty frontier proves no
 solution exists either way — and both only prune by skipping board
 positions already proven fruitless earlier in the *same* search
-(`stateKey(for:)`, a canonical string over every pile in order — order
-matters for legality, so it's not just set membership). That doesn't
+(`stateKey(for:)`, a canonical string over every pile). That doesn't
 skip any reachable win, just redundant re-exploration.
+
+`stateKey(for:)` sorts the tableau's column strings before joining them,
+rather than keeping them in column-index order — column index never
+affects legality (`canPlace`/`legalMoves` only look at a column's
+*contents*), so two boards differing only by which physical column an
+interchangeable empty/single-card stack sits in are the same position for
+search purposes, and treating them as distinct wasted enormous effort
+re-exploring permutations of the same subtree. The project owner's own
+suspicion ("moving a single card to another free slot does not do
+anything... but I think there are more infinite loops") led to this fix.
+Verified experimentally (an independent Python reimplementation, same 40
+test deals, before/after): solve rate 10.0% -> 37.5%, average states
+needed to find a win 74,995 -> 11,218, timeouts (search exhausting its
+budget inconclusively) 35.0% -> 5.0%. Reserve/bottomTrump/topTrump/
+colourFoundations are each a unique, non-interchangeable slot and keep
+their fixed position in the key — only the tableau columns are
+order-independent.
 
 - Requires a hard wall-clock time limit (the project owner explicitly
   asked for this) — this game's search space is large enough that

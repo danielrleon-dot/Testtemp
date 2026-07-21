@@ -95,7 +95,9 @@ approximation. It offers two strategies:
 
 Both skip re-exploring a board position already proven fruitless earlier
 in the same search (that doesn't skip any reachable win, just redundant
-re-exploration), and both are still exhaustive if given enough time — an
+re-exploration — including recognizing that two boards differing only by
+*which* empty column a spare card happens to be parked in are really the
+same position), and both are still exhaustive if given enough time — an
 empty search space proves no solution exists either way.
 
 - Pick a **strategy** and a **time limit** (10s/30s/60s/2m), then

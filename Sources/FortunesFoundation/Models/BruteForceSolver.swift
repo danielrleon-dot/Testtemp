@@ -10,8 +10,11 @@ import Foundation
 ///   heuristic thinks is closest to a win next. Still exhaustive if run
 ///   to completion (an empty frontier still proves no solution exists),
 ///   but far more likely to *find* a solution quickly, at the cost of
-///   holding many more candidate positions in memory at once (bounded by
-///   `maxFrontierSize`, past which it pauses rather than growing forever).
+///   holding many more candidate positions in memory at once — capped via
+///   `maxFrontierSize`, a *soft* limit past which new candidates simply
+///   stop being added (existing ones keep getting expanded normally, so
+///   the frontier shrinks back down over time instead of growing forever
+///   or getting permanently stuck).
 ///
 /// Both are separate from SolitaireAI on purpose: this is exact search,
 /// not a learned approximation. The heuristic best-first uses is its own
@@ -60,9 +63,10 @@ final class BruteForceSolver: ObservableObject {
     private var progressTimer: Timer?
     private var cumulativeElapsedSeconds: TimeInterval = 0
 
-    /// Past this many pending positions, best-first search pauses rather
-    /// than growing its frontier further — a safety valve against
-    /// unbounded memory growth on a very long / very open search.
+    /// Soft cap on best-first search's frontier: past this many pending
+    /// positions, new candidates stop being added (existing ones keep
+    /// being expanded normally) — a safety valve against unbounded memory
+    /// growth, without ever stalling the search entirely.
     private static let maxFrontierSize = 200_000
 
     /// Thread-safe (lock-backed) counter + cancel flag: the search loop on
@@ -288,6 +292,13 @@ final class BruteForceSolver: ObservableObject {
     /// non-duplicate state if run to exhaustion (same completeness
     /// guarantee as depth-first — an empty frontier still proves no
     /// solution exists), just in a much more useful order in practice.
+    ///
+    /// The frontier-size cap is a *soft* limit: past it, popping/expanding
+    /// nodes continues as normal, only adding brand-new candidates stops —
+    /// so the frontier shrinks back down over time instead of the search
+    /// getting stuck. A hard "stop everything once over the cap" version
+    /// re-triggered the same pause on every subsequent continueSearching()
+    /// call with zero progress, since nothing had shrunk the frontier.
     private func runBestFirstSearch(session: SearchSession, progress: SearchProgress, deadline: Date) -> SearchOutcome {
         guard var heap = session.bestFirstHeap else { return .exhausted }
         var outcome: SearchOutcome = .exhausted
@@ -295,7 +306,6 @@ final class BruteForceSolver: ObservableObject {
         searchLoop: while !heap.isEmpty {
             if progress.isCancelled { outcome = .cancelled; break searchLoop }
             if Date() >= deadline { outcome = .pausedAtDeadline; break searchLoop }
-            if heap.count > Self.maxFrontierSize { outcome = .pausedAtDeadline; break searchLoop }
             guard let node = heap.popMin() else { break searchLoop }
 
             session.worker.restore(node.snapshot)
@@ -318,7 +328,9 @@ final class BruteForceSolver: ObservableObject {
                 if session.visited.contains(key) { continue }
                 session.visited.insert(key)
                 progress.incrementExplored()
-                heap.insert(Node(snapshot: session.worker.currentSnapshot(), path: childPath, heuristicValue: heuristic(for: session.worker)))
+                if heap.count < Self.maxFrontierSize {
+                    heap.insert(Node(snapshot: session.worker.currentSnapshot(), path: childPath, heuristicValue: heuristic(for: session.worker)))
+                }
             }
         }
 

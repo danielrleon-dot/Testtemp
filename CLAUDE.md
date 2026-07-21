@@ -114,8 +114,13 @@ cancellation, undo-tracked playback):
   an untrained evaluator scores everything ~0, which would make the
   ordering meaningless. Bounded by `maxFrontierSize` (200,000) as a
   memory safety valve, since unlike the DFS stack (bounded by search
-  depth) the frontier can otherwise grow very large; hitting that cap
-  reports `.pausedAtDeadline` just like a real timeout.
+  depth) the frontier can otherwise grow very large. This is a *soft*
+  cap: past it, new candidates just stop being inserted while existing
+  ones keep getting popped/expanded normally, so the frontier shrinks
+  back down over time. A hard cap (stop everything once over the limit)
+  had a real bug: continueSearching() would immediately re-hit the same
+  full-frontier check and re-pause with zero progress, since nothing
+  had shrunk it — "Continue" looked like it did nothing.
 
 Both are exhaustive if run to completion — an empty frontier proves no
 solution exists either way — and both only prune by skipping board

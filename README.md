@@ -86,8 +86,9 @@ approximation. It offers two strategies:
   heuristic (cards home, empty columns, longest movable run, whether the
   Reserve is free) rates closest to a win next, instead of a fixed order.
   Much more likely to find a solution before the time limit, at the cost
-  of holding more candidate positions in memory at once (it self-limits
-  past 200,000 pending positions rather than growing unbounded).
+  of holding more candidate positions in memory at once — past 200,000
+  pending positions it stops adding new ones (existing ones keep getting
+  explored normally) rather than growing unbounded.
 
 Both skip re-exploring a board position already proven fruitless earlier
 in the same search (that doesn't skip any reachable win, just redundant

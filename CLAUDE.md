@@ -26,6 +26,13 @@ The rules are implemented in
 check that the two stay in sync — if you change one, update the other by
 hand, and call out any mismatch you notice.
 
+Both carry a **rules version number** (`GameState.rulesVersion`, mirrored
+at the top of `RULES.md`) that must be bumped by hand alongside any actual
+rules change (not cosmetic edits) — every `SolvedPuzzleRecord` is stamped
+with it, and `PuzzleDatabase` uses a mismatch to keep puzzles solved under
+an old ruleset from silently corrupting AI training after the rules
+change. See the Puzzle database section below.
+
 Key shape of the ruleset (see RULES.md for the authoritative version):
 - 70-card deck: 4 colours x (2...King, no Aces) + trumps (0...21).
 - 11-column tableau, middle column starts empty, 7 cards dealt to each of
@@ -204,14 +211,31 @@ skip any reachable win, just redundant re-exploration.
 ## Puzzle database (SolvedPuzzleRecord / PuzzleDatabase)
 
 Bridges the Solver and the AI: every puzzle the Solver proves winnable is
-persisted (seed + starting `GameState.GameSnapshot` + winning `[Move]`) to
-a JSON file under Application Support, growing across app launches. This
-is what `SolitaireAI.trainFromSolvedPuzzles(_:)` trains from. The
-starting *snapshot* is authoritative for replay, not just the seed —
-`solve()` can be invoked from any board the player has open, not only a
-freshly dealt one, so seed-only replay wouldn't always reproduce it.
-`GameState.GameSnapshot`, `PileLocation`, and `Move` are all `Codable`
+persisted (seed + starting `GameState.GameSnapshot` + winning `[Move]` +
+`rulesVersion`) to a JSON file under Application Support, growing across
+app launches. This is what `SolitaireAI.trainFromSolvedPuzzles(_:)` trains
+from. The starting *snapshot* is authoritative for replay, not just the
+seed — `solve()` can be invoked from any board the player has open, not
+only a freshly dealt one, so seed-only replay wouldn't always reproduce
+it. `GameState.GameSnapshot`, `PileLocation`, and `Move` are all `Codable`
 specifically to support this persistence.
+
+Every record is stamped with the `GameState.rulesVersion` in effect when
+it was solved. `PuzzleDatabase.validRecords` filters to only records whose
+`rulesVersion` matches the *current* `GameState.rulesVersion` — that's
+what `trainFromSolvedPuzzles` and the "Train from Puzzles" button actually
+use, not the raw `records` array. A record stamped with an older version
+predates a rules change: its move sequence might not even replay legally
+anymore, and even where it happens to, it no longer reflects how the game
+is actually played, so training on it would actively teach the AI stale
+behaviour rather than just being a missed opportunity. Stale records are
+never deleted (`PuzzleDatabase.staleRecordCount` surfaces the count in the
+UI instead) — they're evidence of real solved work, just not safe to
+learn from until/unless someone confirms they still apply. Records
+persisted before this versioning existed decode with `rulesVersion == 0`
+(`SolvedPuzzleRecord.init(from:)`), which can never match a real
+`GameState.rulesVersion` (starts at 1), so old databases degrade to "all
+stale" rather than crashing on load or silently passing as current.
 
 ## Status / important caveat
 

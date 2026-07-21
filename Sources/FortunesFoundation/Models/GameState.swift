@@ -63,6 +63,23 @@ final class GameState: ObservableObject {
     static let columnCount = 11
     static let middleColumn = 5
 
+    /// Identifies which revision of the gameplay rules (RULES.md, and this
+    /// file's implementation of it) a `SolvedPuzzleRecord` was solved
+    /// under. Bump this by hand any time a change here changes what's
+    /// legal or how the board behaves — auto-move conditions, placement
+    /// legality, board shape (column count, foundation types), the
+    /// "drag whole column" behaviour, etc. — the same "edit both by hand,
+    /// nothing enforces it" honor system CLAUDE.md already asks for
+    /// between RULES.md and this file, just extended to a version number
+    /// puzzles get stamped with. `PuzzleDatabase` uses a mismatch against
+    /// this value to treat a record as stale: after a rules change, an
+    /// older record's stored moves may no longer even be legal, and even
+    /// if they happen to still replay, they no longer reflect the game as
+    /// it's actually played, so they'd be actively harmful to train the AI
+    /// on. Cosmetic-only changes (view/rendering code, UI copy) don't need
+    /// a bump.
+    static let rulesVersion = 1
+
     /// Pass a seed to deal directly to a reproducible game (e.g. for AI
     /// self-play); omit it for a fresh random deal.
     init(seed: UInt64? = nil) {

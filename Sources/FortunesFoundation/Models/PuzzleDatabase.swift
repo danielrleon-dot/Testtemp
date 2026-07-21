@@ -7,6 +7,27 @@ import Foundation
 final class PuzzleDatabase: ObservableObject {
     @Published private(set) var records: [SolvedPuzzleRecord] = []
 
+    /// Records solved under the ruleset currently in effect
+    /// (`GameState.rulesVersion`) — the only ones safe to train the AI
+    /// from or trust as a "known win." A record stamped with a different
+    /// version predates a rules change: its stored moves might not even
+    /// be legal anymore (the solver replays them via `performMove`, which
+    /// would simply fail partway through), and even if they happen to
+    /// still replay cleanly, they no longer describe how the game is
+    /// actually played, so training on them would teach the AI a game
+    /// that no longer exists.
+    var validRecords: [SolvedPuzzleRecord] {
+        records.filter { $0.rulesVersion == GameState.rulesVersion }
+    }
+
+    /// Records kept on disk (nothing is ever deleted by a rules change)
+    /// but excluded from `validRecords` because they predate the current
+    /// rules — surfaced in the UI so a rules change doesn't silently make
+    /// old puzzle-solving effort vanish without explanation.
+    var staleRecordCount: Int {
+        records.count - validRecords.count
+    }
+
     private let fileURL: URL
 
     init() {

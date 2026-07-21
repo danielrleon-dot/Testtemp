@@ -170,16 +170,16 @@ struct ContentView: View {
                 }
             }
 
-            Text("· \(puzzleDatabase.records.count) solved puzzles")
+            Text(puzzleCountSummary)
                 .foregroundColor(.white.opacity(0.6))
 
             historyButton(
                 title: "Train from Puzzles",
                 systemImage: "book.fill",
                 color: .brown,
-                enabled: !ai.isTraining && !puzzleDatabase.records.isEmpty
+                enabled: !ai.isTraining && !puzzleDatabase.validRecords.isEmpty
             ) {
-                ai.trainFromSolvedPuzzles(puzzleDatabase.records)
+                ai.trainFromSolvedPuzzles(puzzleDatabase.validRecords)
             }
 
             Spacer()
@@ -194,6 +194,16 @@ struct ContentView: View {
         }
         let winPercent = Int((Double(ai.gamesWon) / Double(ai.gamesPlayed) * 100).rounded())
         return "\(ai.gamesWon)/\(ai.gamesPlayed) won this session (\(winPercent)%) · \(lifetime)"
+    }
+
+    /// Only `validRecords` (solved under the current rules) count toward
+    /// training; `staleRecordCount` is called out separately so a rules
+    /// change doesn't make old puzzle-solving effort disappear without
+    /// explanation — the puzzles are still on disk, just no longer usable.
+    private var puzzleCountSummary: String {
+        let base = "· \(puzzleDatabase.validRecords.count) solved puzzles"
+        guard puzzleDatabase.staleRecordCount > 0 else { return base }
+        return base + " (\(puzzleDatabase.staleRecordCount) stale, pre-rules-change)"
     }
 
     /// Separate from the AI: this is exhaustive search, not a learned

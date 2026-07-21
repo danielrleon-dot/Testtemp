@@ -112,6 +112,30 @@ about without a compiler to check it.
   (better features, a neural net, prioritized self-play, etc.), not a
   finished solver on its own. Training from solved puzzles (see below)
   is a meaningfully stronger lever than more self-play episodes.
+- The evaluator's weights diverged to ~1e189 in practice after ~6,800
+  lifetime self-play episodes — caught via `TrainingLog`'s history (see
+  below), which is exactly the kind of thing it was added for. Root
+  cause was two compounding issues, both now fixed: `BoardFeatures` used
+  to include a `foundationCards` feature equal to
+  `trumpProgress + colourProgress` on every board, an exact linear
+  combination that gave gradient descent a flat, completely undamped
+  drift direction; and every feature was an unnormalized raw count (up
+  to 70), so a fixed `learningRate` step scaled with those large values
+  too. Fixed by dropping the redundant feature (`BoardFeatures.count`
+  7 → 6), normalizing every feature to roughly `[0, 1]`, decaying
+  `learningRate` with `totalEpisodesTrained` the same way
+  `explorationRate` already did, and adding a hard per-weight clamp
+  (`BoardEvaluator.weightBound`, ±200) as a defensive backstop against
+  future divergence regardless of cause. Because
+  `BoardEvaluator.loadFromDisk()` already refuses to load weights whose
+  count doesn't match the current `BoardFeatures.count`, changing the
+  feature count was itself enough to force a clean reset of the old
+  diverged weights on next launch — `SolitaireAI.init()` was extended to
+  reset `totalEpisodesTrained` to 0 in that same fresh-evaluator branch,
+  so a reset evaluator also gets a fresh exploration/learning-rate
+  schedule instead of inheriting a large lifetime count that would
+  otherwise pin both straight to their floors for weights that have
+  learned nothing yet.
 - `TrainingLog` (`TrainingLog.swift` / `TrainingLogEntry.swift`) appends
   one JSON record per training run — timestamp, kind (`.selfPlay` vs
   `.puzzles`), the evaluator's full weight vector at that point, and

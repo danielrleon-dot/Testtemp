@@ -15,8 +15,11 @@ struct TrainingLogEntry: Codable {
 
     let timestamp: Date
     let kind: Kind
-    /// Same order as BoardFeatures: [bias, foundationCards, emptyColumns,
-    /// reserveOccupied, longestRun, trumpProgress, colourProgress].
+    /// Same order as BoardFeatures.extract(from:): [bias, emptyColumns,
+    /// reserveOccupied, longestRun, trumpProgress, colourProgress]. Length
+    /// can change if BoardFeatures' shape ever changes again — this is a
+    /// raw historical log, not schema-validated against the current
+    /// BoardFeatures.count.
     let weights: [Double]
     /// Self-play episodes run this call (.selfPlay), or puzzles trained on
     /// this call (.puzzles).

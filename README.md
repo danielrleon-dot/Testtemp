@@ -158,6 +158,16 @@ The "AI" row has a self-play reinforcement-learning agent:
   reliably win full games from self-play signal alone. See
   `Models/SolitaireAI.swift` for both training loops and
   `Models/BoardEvaluator.swift` for the learning rule.
+- **One-time reset**: earlier training data showed the evaluator's
+  weights had drifted to an unusable, astronomically large state (a
+  numerical instability in the learning rule, now fixed — features are
+  normalized, a redundant feature was removed, the learning rate now
+  decays, and weights are clamped to a sane range as a backstop). The
+  next launch after this fix starts the AI's weights and lifetime
+  training count over from zero — previously trained weights aren't
+  salvageable, so this is a clean slate rather than lost progress worth
+  preserving. Solved puzzles and self-play from here on will retrain it
+  correctly.
 - Every training run (either button) appends a record — timestamp,
   training kind, the evaluator's full weight vector, and (for self-play)
   that run's win/loss counts — to a JSON log at

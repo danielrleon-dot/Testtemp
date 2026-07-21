@@ -7,6 +7,16 @@ import Foundation
 struct BoardEvaluator: Codable {
     var weights: [Double]
 
+    /// Hard bound on any single weight — a defensive backstop against
+    /// runaway divergence in the TD update. Semi-gradient bootstrapping
+    /// with function approximation isn't guaranteed to converge, and in
+    /// practice (see BoardFeatures' doc comment) it diverged to ~1e189
+    /// over real training. Every target value this evaluator is ever
+    /// trained toward is bounded to roughly ±50 (see SolitaireAI), so a
+    /// generous multiple of that is enough headroom for legitimate
+    /// learning while still making runaway growth impossible.
+    private static let weightBound = 200.0
+
     init(weights: [Double]? = nil) {
         self.weights = weights ?? Array(repeating: 0, count: BoardFeatures.count)
     }
@@ -21,7 +31,8 @@ struct BoardEvaluator: Codable {
     mutating func update(features: [Double], targetValue: Double, learningRate: Double) {
         let error = targetValue - value(for: features)
         for i in weights.indices {
-            weights[i] += learningRate * error * features[i]
+            let updated = weights[i] + learningRate * error * features[i]
+            weights[i] = min(Self.weightBound, max(-Self.weightBound, updated))
         }
     }
 }

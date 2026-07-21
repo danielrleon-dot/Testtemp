@@ -16,7 +16,6 @@ final class SolitaireAI: ObservableObject {
     @Published private(set) var isTraining: Bool = false
     @Published private(set) var totalEpisodesTrained: Int
 
-    private let learningRate = 0.01
     private let discount = 0.98
     private let maxStepsPerGame = 400
     private let trainingQueue = DispatchQueue(label: "SolitaireAI.training", qos: .utility)
@@ -24,9 +23,24 @@ final class SolitaireAI: ObservableObject {
 
     private static let episodesKey = "SolitaireAI.totalEpisodesTrained"
 
+    /// `BoardEvaluator.loadFromDisk()` returns nil both on first launch
+    /// ever and whenever BoardFeatures' shape has changed since the saved
+    /// weights were written (its own shape-mismatch guard) — either way,
+    /// this is a genuinely fresh evaluator that has never seen a single
+    /// training update. The lifetime episode counter needs to restart
+    /// alongside it: leaving an old, large count in place would push
+    /// `explorationRate`/`learningRate` straight to their floors for
+    /// weights that know nothing yet, starving them of the exploration
+    /// and step size they actually need to (re)learn from scratch.
     init() {
-        evaluator = BoardEvaluator.loadFromDisk() ?? BoardEvaluator()
-        totalEpisodesTrained = UserDefaults.standard.integer(forKey: Self.episodesKey)
+        if let loaded = BoardEvaluator.loadFromDisk() {
+            evaluator = loaded
+            totalEpisodesTrained = UserDefaults.standard.integer(forKey: Self.episodesKey)
+        } else {
+            evaluator = BoardEvaluator()
+            totalEpisodesTrained = 0
+            UserDefaults.standard.set(0, forKey: Self.episodesKey)
+        }
     }
 
     /// Runs `episodes` self-play games on a background queue, updating the
@@ -41,8 +55,10 @@ final class SolitaireAI: ObservableObject {
             var played = 0
             var won = 0
             for i in 0..<episodes {
-                let rate = self.explorationRate(afterEpisodes: startingTotal + i)
-                if self.playOneEpisode(learn: true, explorationRate: rate) { won += 1 }
+                let episodeIndex = startingTotal + i
+                let exploration = self.explorationRate(afterEpisodes: episodeIndex)
+                let stepSize = self.learningRate(afterEpisodes: episodeIndex)
+                if self.playOneEpisode(learn: true, explorationRate: exploration, learningRate: stepSize) { won += 1 }
                 played += 1
             }
             self.evaluator.saveToDisk()
@@ -77,10 +93,11 @@ final class SolitaireAI: ObservableObject {
         guard !isTraining, !records.isEmpty else { return }
         isTraining = true
         let episodesSnapshot = totalEpisodesTrained
+        let stepSize = learningRate(afterEpisodes: episodesSnapshot)
         trainingQueue.async { [weak self] in
             guard let self else { return }
             for record in records {
-                self.trainFromSolvedPuzzle(record)
+                self.trainFromSolvedPuzzle(record, learningRate: stepSize)
             }
             self.evaluator.saveToDisk()
             self.trainingLog.append(TrainingLogEntry(
@@ -103,7 +120,7 @@ final class SolitaireAI: ObservableObject {
     /// rather than a self-play estimate that needs several passes to
     /// settle — the same reward/discount shape as self-play, just applied
     /// to a path that's known in full instead of built move by move.
-    private func trainFromSolvedPuzzle(_ record: SolvedPuzzleRecord) {
+    private func trainFromSolvedPuzzle(_ record: SolvedPuzzleRecord, learningRate: Double) {
         let game = GameState(seed: record.seed)
         game.restore(record.startingSnapshot)
 
@@ -147,8 +164,18 @@ final class SolitaireAI: ObservableObject {
         max(0.02, 0.15 - Double(n) * 0.00005)
     }
 
+    /// TD(0) step size, decaying with lifetime episodes for the same
+    /// reason explorationRate does. A permanently fixed step size doesn't
+    /// converge under bootstrapping — it settles into a noisy
+    /// neighborhood, not a point — which combined with the feature
+    /// collinearity BoardFeatures used to have was what let the weights
+    /// diverge to ~1e189 in practice over real training.
+    private func learningRate(afterEpisodes n: Int) -> Double {
+        max(0.001, 0.01 - Double(n) * 0.0000015)
+    }
+
     @discardableResult
-    private func playOneEpisode(learn: Bool, explorationRate: Double) -> Bool {
+    private func playOneEpisode(learn: Bool, explorationRate: Double, learningRate: Double) -> Bool {
         let game = GameState(seed: UInt64.random(in: UInt64.min...UInt64.max))
         var previousFeatures = BoardFeatures.extract(from: game)
         var steps = 0

@@ -87,8 +87,11 @@ approximation. It offers two strategies:
   Reserve is free) rates closest to a win next, instead of a fixed order.
   Much more likely to find a solution before the time limit, at the cost
   of holding more candidate positions in memory at once — past 200,000
-  pending positions it stops adding new ones (existing ones keep getting
-  explored normally) rather than growing unbounded.
+  pending positions it **pauses** rather than growing unbounded, exactly
+  like hitting the time limit (see below). It never discards a candidate
+  to stay under that cap; discarding would risk wrongly reporting "no
+  solution exists" for a puzzle that's actually solvable, just not yet
+  fully explored.
 
 Both skip re-exploring a board position already proven fruitless earlier
 in the same search (that doesn't skip any reachable win, just redundant

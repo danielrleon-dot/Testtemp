@@ -10,11 +10,13 @@ import Foundation
 ///   heuristic thinks is closest to a win next. Still exhaustive if run
 ///   to completion (an empty frontier still proves no solution exists),
 ///   but far more likely to *find* a solution quickly, at the cost of
-///   holding many more candidate positions in memory at once — capped via
-///   `maxFrontierSize`, a *soft* limit past which new candidates simply
-///   stop being added (existing ones keep getting expanded normally, so
-///   the frontier shrinks back down over time instead of growing forever
-///   or getting permanently stuck).
+///   holding many more candidate positions in memory at once — bounded by
+///   `maxFrontierSize` as a memory safety valve. This is checked only
+///   after a node has been fully expanded, and never discards anything:
+///   once over the limit it *pauses* the whole search instead, so the
+///   frontier is never silently shrunk behind the search's back and an
+///   eventual empty frontier is always a sound proof that no solution
+///   exists.
 ///
 /// Both are separate from SolitaireAI on purpose: this is exact search,
 /// not a learned approximation. The heuristic best-first uses is its own
@@ -71,10 +73,12 @@ final class BruteForceSolver: ObservableObject {
     private var progressTimer: Timer?
     private var cumulativeElapsedSeconds: TimeInterval = 0
 
-    /// Soft cap on best-first search's frontier: past this many pending
-    /// positions, new candidates stop being added (existing ones keep
-    /// being expanded normally) — a safety valve against unbounded memory
-    /// growth, without ever stalling the search entirely.
+    /// Memory safety valve on best-first search's frontier: once it grows
+    /// past this many pending positions (checked only after a node is
+    /// fully expanded), the search pauses rather than continuing to grow
+    /// unbounded. Never used to discard candidates — see the note above
+    /// `runBestFirstSearch` for why an earlier discard-based version of
+    /// this cap was a correctness bug, not just a memory optimization.
     private static let maxFrontierSize = 200_000
 
     /// Thread-safe (lock-backed) counter + cancel flag: the search loop on
@@ -303,12 +307,18 @@ final class BruteForceSolver: ObservableObject {
     /// guarantee as depth-first — an empty frontier still proves no
     /// solution exists), just in a much more useful order in practice.
     ///
-    /// The frontier-size cap is a *soft* limit: past it, popping/expanding
-    /// nodes continues as normal, only adding brand-new candidates stops —
-    /// so the frontier shrinks back down over time instead of the search
-    /// getting stuck. A hard "stop everything once over the cap" version
-    /// re-triggered the same pause on every subsequent continueSearching()
-    /// call with zero progress, since nothing had shrunk the frontier.
+    /// Nothing is ever discarded to enforce the frontier cap — an earlier
+    /// version silently dropped newly-generated candidates once over the
+    /// limit, which could make the frontier drain to empty (from popping
+    /// more than it was allowed to insert) and get misreported as
+    /// `.exhausted` ("no solution exists") when really it had just given
+    /// up on unexplored branches without ever ruling them out — a false
+    /// negative, confirmed by the project owner finding a manual solution
+    /// the solver had wrongly called impossible. The cap is checked only
+    /// *after* fully processing a node (so continueSearching() always
+    /// makes at least that much progress before possibly re-pausing), and
+    /// pauses the whole search rather than dropping anything, so an
+    /// eventual empty frontier is always a sound proof of no solution.
     private func runBestFirstSearch(session: SearchSession, progress: SearchProgress, deadline: Date) -> SearchOutcome {
         guard var heap = session.bestFirstHeap else { return .exhausted }
         var outcome: SearchOutcome = .exhausted
@@ -338,9 +348,12 @@ final class BruteForceSolver: ObservableObject {
                 if session.visited.contains(key) { continue }
                 session.visited.insert(key)
                 progress.incrementExplored()
-                if heap.count < Self.maxFrontierSize {
-                    heap.insert(Node(snapshot: session.worker.currentSnapshot(), path: childPath, heuristicValue: heuristic(for: session.worker)))
-                }
+                heap.insert(Node(snapshot: session.worker.currentSnapshot(), path: childPath, heuristicValue: heuristic(for: session.worker)))
+            }
+
+            if heap.count > Self.maxFrontierSize {
+                outcome = .pausedAtDeadline
+                break searchLoop
             }
         }
 

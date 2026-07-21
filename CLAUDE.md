@@ -126,13 +126,28 @@ cancellation, undo-tracked playback):
   an untrained evaluator scores everything ~0, which would make the
   ordering meaningless. Bounded by `maxFrontierSize` (200,000) as a
   memory safety valve, since unlike the DFS stack (bounded by search
-  depth) the frontier can otherwise grow very large. This is a *soft*
-  cap: past it, new candidates just stop being inserted while existing
-  ones keep getting popped/expanded normally, so the frontier shrinks
-  back down over time. A hard cap (stop everything once over the limit)
-  had a real bug: continueSearching() would immediately re-hit the same
-  full-frontier check and re-pause with zero progress, since nothing
-  had shrunk it — "Continue" looked like it did nothing.
+  depth) the frontier can otherwise grow very large. This cap has gone
+  through two buggy designs before landing on the current one, both
+  found through real play on the project owner's Mac:
+  1. A hard cap (stop everything once over the limit) checked *before*
+     popping anything: `continueSearching()` would immediately re-hit the
+     same full-frontier check and re-pause with zero progress, since
+     nothing had shrunk it yet — "Continue" looked like it did nothing.
+  2. The fix for that made it a *soft* cap instead: past the limit, new
+     candidates simply stopped being inserted while existing ones kept
+     getting popped/expanded, so the frontier would shrink back down over
+     time. This introduced a worse bug: those skipped candidates were
+     discarded, not deferred, so if the frontier later drained to empty
+     it exited the loop and reported "no solution exists" — a **false
+     negative**. The project owner hit this directly: "i managed to solve
+     a puzzle that the solver said could not be solved."
+  The current design fixes both: the cap is checked exactly once per
+  outer loop iteration, *after* a node has been fully expanded (so
+  `continueSearching()` always makes at least that much progress before
+  possibly re-pausing), and when triggered it **pauses the whole search**
+  rather than dropping any candidate — nothing already in the frontier is
+  ever discarded, so an eventual empty frontier remains a sound proof
+  that no solution exists.
 
 Both are exhaustive if run to completion — an empty frontier proves no
 solution exists either way — and both only prune by skipping board

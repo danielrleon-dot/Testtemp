@@ -112,6 +112,20 @@ about without a compiler to check it.
   (better features, a neural net, prioritized self-play, etc.), not a
   finished solver on its own. Training from solved puzzles (see below)
   is a meaningfully stronger lever than more self-play episodes.
+- `TrainingLog` (`TrainingLog.swift` / `TrainingLogEntry.swift`) appends
+  one JSON record per training run — timestamp, kind (`.selfPlay` vs
+  `.puzzles`), the evaluator's full weight vector at that point, and
+  (for self-play) that run's win/loss counts — to
+  `Application Support/Solitaire/TrainingLog.json`. Purely diagnostic:
+  nothing in the app reads it back at runtime, and it adds no UI. It
+  exists so the weights' evolution and self-play's win rate can be
+  reviewed together after the fact (e.g. by exporting the file and
+  handing it to an outside reviewer), since the running app itself only
+  ever exposes the evaluator's *current* weights and the current
+  session's win rate, not their history. Appends happen on
+  `trainingQueue`, the same serial background queue `train(episodes:)`
+  and `trainFromSolvedPuzzles(_:)` already run on, so writes are
+  naturally serialized without extra locking.
 
 ## Solver (BruteForceSolver)
 
@@ -278,6 +292,8 @@ Sources/FortunesFoundation/
     BruteForceSolver.swift      exhaustive search for a winning sequence
     SolvedPuzzleRecord.swift    a solved puzzle (seed + start + moves)
     PuzzleDatabase.swift        on-disk store of solved puzzles
+    TrainingLogEntry.swift      one training-run record (weights + outcome)
+    TrainingLog.swift           on-disk history of training runs
   Views/
     ContentView.swift           top-level layout
     CardView.swift              single card rendering

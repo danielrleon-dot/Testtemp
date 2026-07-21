@@ -20,6 +20,7 @@ final class SolitaireAI: ObservableObject {
     private let discount = 0.98
     private let maxStepsPerGame = 400
     private let trainingQueue = DispatchQueue(label: "SolitaireAI.training", qos: .utility)
+    private let trainingLog = TrainingLog()
 
     private static let episodesKey = "SolitaireAI.totalEpisodesTrained"
 
@@ -47,6 +48,15 @@ final class SolitaireAI: ObservableObject {
             self.evaluator.saveToDisk()
             let newTotal = startingTotal + played
             UserDefaults.standard.set(newTotal, forKey: Self.episodesKey)
+            self.trainingLog.append(TrainingLogEntry(
+                timestamp: Date(),
+                kind: .selfPlay,
+                weights: self.evaluator.weights,
+                unitsThisRun: played,
+                totalEpisodesTrained: newTotal,
+                gamesWonThisRun: won,
+                gamesPlayedThisRun: played
+            ))
             DispatchQueue.main.async {
                 self.gamesPlayed += played
                 self.gamesWon += won
@@ -66,12 +76,22 @@ final class SolitaireAI: ObservableObject {
     func trainFromSolvedPuzzles(_ records: [SolvedPuzzleRecord]) {
         guard !isTraining, !records.isEmpty else { return }
         isTraining = true
+        let episodesSnapshot = totalEpisodesTrained
         trainingQueue.async { [weak self] in
             guard let self else { return }
             for record in records {
                 self.trainFromSolvedPuzzle(record)
             }
             self.evaluator.saveToDisk()
+            self.trainingLog.append(TrainingLogEntry(
+                timestamp: Date(),
+                kind: .puzzles,
+                weights: self.evaluator.weights,
+                unitsThisRun: records.count,
+                totalEpisodesTrained: episodesSnapshot,
+                gamesWonThisRun: nil,
+                gamesPlayedThisRun: nil
+            ))
             DispatchQueue.main.async {
                 self.isTraining = false
             }

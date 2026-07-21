@@ -158,6 +158,13 @@ The "AI" row has a self-play reinforcement-learning agent:
   reliably win full games from self-play signal alone. See
   `Models/SolitaireAI.swift` for both training loops and
   `Models/BoardEvaluator.swift` for the learning rule.
+- Every training run (either button) appends a record — timestamp,
+  training kind, the evaluator's full weight vector, and (for self-play)
+  that run's win/loss counts — to a JSON log at
+  `~/Library/Application Support/Solitaire/TrainingLog.json`. There's no
+  in-app viewer for it; it's there so you can export the file and get an
+  outside review of how the weights evolved alongside the win rate,
+  rather than only ever seeing the current weights in isolation.
 
 ## Project layout
 
@@ -177,6 +184,8 @@ Sources/FortunesFoundation/
     BruteForceSolver.swift      exhaustive search for a winning sequence
     SolvedPuzzleRecord.swift    a solved puzzle (seed + start + moves)
     PuzzleDatabase.swift        on-disk store of solved puzzles
+    TrainingLogEntry.swift      one training-run record (weights + outcome)
+    TrainingLog.swift           on-disk history of training runs
   Views/
     ContentView.swift           top-level layout
     CardView.swift               single card rendering

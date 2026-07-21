@@ -4,7 +4,7 @@ import Foundation
 /// `takeWholeRun` is true and one exists, the matching run behind it too)
 /// and place it on `destination`. Produced by GameState.legalMoves() and
 /// applied via GameState.performMove(_:recordForUndo:).
-struct Move: Hashable {
+struct Move: Hashable, Codable {
     let source: PileLocation
     let destination: PileLocation
     let takeWholeRun: Bool

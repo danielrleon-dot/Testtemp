@@ -48,8 +48,10 @@ final class GameState: ObservableObject {
     /// A full copy of everything undo/redo needs to restore. moveCount is
     /// included so it rewinds/replays in lockstep with the board. Not
     /// private: SolitaireAI also uses this to simulate-and-roll-back
-    /// candidate moves when picking the best one.
-    struct GameSnapshot {
+    /// candidate moves when picking the best one. Codable so a solved
+    /// puzzle's starting position can be persisted (see
+    /// SolvedPuzzleRecord) and replayed later for supervised training.
+    struct GameSnapshot: Codable {
         let tableau: [[Card]]
         let reserve: Card?
         let bottomTrump: [Card]

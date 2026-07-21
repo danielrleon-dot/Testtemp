@@ -57,6 +57,14 @@ final class BruteForceSolver: ObservableObject {
     private(set) var solution: [Move] = []
     @Published private(set) var solutionStepsPlayed: Int = 0
 
+    /// The seed and starting position `solve()` was last called with —
+    /// kept (not cleared by a pause) so a solution found after one or more
+    /// continueSearching() calls can still be recorded as a
+    /// SolvedPuzzleRecord using the position the search actually started
+    /// from, not wherever it happened to be paused.
+    private(set) var solvedSeed: UInt64?
+    private(set) var solvedStartingSnapshot: GameState.GameSnapshot?
+
     private let searchQueue = DispatchQueue(label: "BruteForceSolver.search", qos: .userInitiated)
     private var progress: SearchProgress?
     private var session: SearchSession?
@@ -151,6 +159,8 @@ final class BruteForceSolver: ObservableObject {
         cumulativeElapsedSeconds = 0
         statesExplored = 0
         elapsedSeconds = 0
+        solvedSeed = game.currentSeed
+        solvedStartingSnapshot = snapshot
 
         if worker.isWon {
             status = .solved(moveCount: 0)

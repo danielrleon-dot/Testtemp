@@ -4,6 +4,7 @@ struct ContentView: View {
     @StateObject private var game = GameState()
     @StateObject private var ai = SolitaireAI()
     @StateObject private var solver = BruteForceSolver()
+    @StateObject private var puzzleDatabase = PuzzleDatabase()
     @State private var seedInput: String = ""
     @State private var solverTimeLimit: Double = 30
     @State private var solverStrategy: BruteForceSolver.Strategy = .bestFirst
@@ -38,6 +39,14 @@ struct ContentView: View {
         )
         .alert("All 70 cards are home!", isPresented: $game.isWon) {
             Button("New Game") { game.newGame() }
+        }
+        .onChange(of: solver.status) { newStatus in
+            guard case .solved = newStatus,
+                  let seed = solver.solvedSeed,
+                  let startingSnapshot = solver.solvedStartingSnapshot else {
+                return
+            }
+            puzzleDatabase.add(SolvedPuzzleRecord(seed: seed, startingSnapshot: startingSnapshot, moves: solver.solution))
         }
     }
 
@@ -159,6 +168,18 @@ struct ContentView: View {
                 if let move = ai.suggestMove(for: game) {
                     game.performMove(move, recordForUndo: true)
                 }
+            }
+
+            Text("· \(puzzleDatabase.records.count) solved puzzles")
+                .foregroundColor(.white.opacity(0.6))
+
+            historyButton(
+                title: "Train from Puzzles",
+                systemImage: "book.fill",
+                color: .brown,
+                enabled: !ai.isTraining && !puzzleDatabase.records.isEmpty
+            ) {
+                ai.trainFromSolvedPuzzles(puzzleDatabase.records)
             }
 
             Spacer()

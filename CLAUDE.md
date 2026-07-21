@@ -90,9 +90,21 @@ about without a compiler to check it.
   legal move by actually applying it to the passed-in live `GameState`,
   reading the resulting value, then rolling it back via
   snapshot/restore — so evaluation never leaves a trial move in place.
-- Expect modest performance, especially before much training — this is
-  meant as a working foundation to keep improving (better features, a
-  neural net, prioritized self-play, etc.), not a finished solver.
+- `SolitaireAI.trainFromSolvedPuzzles(_:)` is supervised training from
+  `SolvedPuzzleRecord`s the solver has actually proven winnable (see
+  below) — a much stronger signal than self-play, since every state on
+  the path is *known* to lead to a real win. `trainFromSolvedPuzzle(_:)`
+  replays one record and walks it **backward** from the win, so each
+  step's TD target is an exact computed return (reward + discount ×
+  next step's already-known target) rather than a self-play bootstrap
+  estimate that needs several passes to settle. Shares `isTraining` and
+  `evaluator` with self-play — same weights, same guard against running
+  concurrently — so the two are complementary, not separate models.
+- Expect modest performance from self-play alone, especially before much
+  training — this is meant as a working foundation to keep improving
+  (better features, a neural net, prioritized self-play, etc.), not a
+  finished solver on its own. Training from solved puzzles (see below)
+  is a meaningfully stronger lever than more self-play episodes.
 
 ## Solver (BruteForceSolver)
 
@@ -166,6 +178,25 @@ skip any reachable win, just redundant re-exploration.
   live game one step at a time (through the same undo-tracked
   `performMove` path as everything else), so the player can watch it
   play out and still undo it afterward.
+- `solvedSeed`/`solvedStartingSnapshot` capture what `solve()` was called
+  with (not wherever a later pause happened to land), so a solution found
+  after one or more `continueSearching()` calls still records the actual
+  starting position. `ContentView` observes `solver.status` via
+  `.onChange` and turns a `.solved` transition into a `SolvedPuzzleRecord`
+  appended to `PuzzleDatabase` — the solver itself doesn't know the
+  database exists, keeping the two independently testable.
+
+## Puzzle database (SolvedPuzzleRecord / PuzzleDatabase)
+
+Bridges the Solver and the AI: every puzzle the Solver proves winnable is
+persisted (seed + starting `GameState.GameSnapshot` + winning `[Move]`) to
+a JSON file under Application Support, growing across app launches. This
+is what `SolitaireAI.trainFromSolvedPuzzles(_:)` trains from. The
+starting *snapshot* is authoritative for replay, not just the seed —
+`solve()` can be invoked from any board the player has open, not only a
+freshly dealt one, so seed-only replay wouldn't always reproduce it.
+`GameState.GameSnapshot`, `PileLocation`, and `Move` are all `Codable`
+specifically to support this persistence.
 
 ## Status / important caveat
 
@@ -202,8 +233,10 @@ Sources/FortunesFoundation/
     GameState.swift             game state, move/auto-move rules, undo/redo
     BoardFeatures.swift         hand-crafted features for the AI
     BoardEvaluator.swift        linear value function + TD(0) update
-    SolitaireAI.swift           self-play training loop, move suggestion
+    SolitaireAI.swift           self-play + puzzle-based training, move suggestion
     BruteForceSolver.swift      exhaustive search for a winning sequence
+    SolvedPuzzleRecord.swift    a solved puzzle (seed + start + moves)
+    PuzzleDatabase.swift        on-disk store of solved puzzles
   Views/
     ContentView.swift           top-level layout
     CardView.swift              single card rendering

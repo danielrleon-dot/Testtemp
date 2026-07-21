@@ -56,6 +56,58 @@ final class SolitaireAI: ObservableObject {
         }
     }
 
+    /// Supervised training from puzzles BruteForceSolver has actually
+    /// proven winnable (see SolvedPuzzleRecord/PuzzleDatabase) — a
+    /// stronger, more direct signal than self-play, since every state
+    /// along the path is known to lead to a real win rather than an
+    /// estimate. Complements self-play; doesn't replace it, and shares
+    /// its `isTraining` guard so the two never run — and mutate
+    /// `evaluator` — concurrently.
+    func trainFromSolvedPuzzles(_ records: [SolvedPuzzleRecord]) {
+        guard !isTraining, !records.isEmpty else { return }
+        isTraining = true
+        trainingQueue.async { [weak self] in
+            guard let self else { return }
+            for record in records {
+                self.trainFromSolvedPuzzle(record)
+            }
+            self.evaluator.saveToDisk()
+            DispatchQueue.main.async {
+                self.isTraining = false
+            }
+        }
+    }
+
+    /// Replays a known winning trajectory and trains toward it backward
+    /// from the win, so each step's bootstrap is an exact computed return
+    /// rather than a self-play estimate that needs several passes to
+    /// settle — the same reward/discount shape as self-play, just applied
+    /// to a path that's known in full instead of built move by move.
+    private func trainFromSolvedPuzzle(_ record: SolvedPuzzleRecord) {
+        let game = GameState(seed: record.seed)
+        game.restore(record.startingSnapshot)
+
+        var featuresAlongPath: [[Double]] = [BoardFeatures.extract(from: game)]
+        var foundationCounts: [Int] = [game.foundationCardCount]
+
+        for move in record.moves {
+            guard game.performMove(move, recordForUndo: false) else { break }
+            featuresAlongPath.append(BoardFeatures.extract(from: game))
+            foundationCounts.append(game.foundationCardCount)
+        }
+        guard featuresAlongPath.count >= 2 else { return }
+
+        var target = 50.0 // value of the final (won) state, matching self-play's win bootstrap
+        var i = featuresAlongPath.count - 2
+        while i >= 0 {
+            let reward = Double(foundationCounts[i + 1] - foundationCounts[i]) - 0.02
+            let stepTarget = reward + discount * target
+            evaluator.update(features: featuresAlongPath[i], targetValue: stepTarget, learningRate: learningRate)
+            target = stepTarget
+            i -= 1
+        }
+    }
+
     /// Picks the AI's current best move for a live game, with no
     /// training/weight updates. Returns nil if the board has no legal
     /// move at all (a dead end). Runs synchronously on the calling

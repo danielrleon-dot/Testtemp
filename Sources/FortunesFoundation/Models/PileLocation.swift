@@ -1,6 +1,6 @@
 import Foundation
 
-enum PileLocation: Hashable {
+enum PileLocation: Hashable, Codable {
     case tableau(Int)
     case reserve
     case bottomTrump

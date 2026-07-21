@@ -111,6 +111,9 @@ empty search space proves no solution exists either way.
 - **Stop** cancels an in-progress search and discards it — unlike hitting
   the time limit, this is not resumable. Starting a new "Solve Current
   Game" also discards any paused search.
+- Every puzzle it solves is automatically saved to a growing on-disk
+  database (see "Train from Puzzles" below) — solving is itself how you
+  build up training data for the AI.
 
 ## AI
 
@@ -127,11 +130,22 @@ The "AI" row has a self-play reinforcement-learning agent:
   app launches (`UserDefaults`).
 - **AI Move** applies the AI's current best move to *your* game, once,
   using whatever it's learned so far (no further training from this).
-- Expect **modest** results, especially before much training — this is a
-  genuine but simple learner, not a solver (that's what the Solver above
-  is for). It should trend toward better foundation progress with more
-  training, but a linear evaluator likely won't reliably win full games.
-  See `Models/SolitaireAI.swift` for the self-play loop and
+- **Train from Puzzles** trains from every puzzle the Solver has actually
+  proven winnable (stored on disk, count shown next to the button) —
+  supervised learning from real, known wins rather than self-play
+  guesswork. Each solved path is replayed and trained on backward from
+  the win, so every step's target value is an exact computed return
+  instead of a self-play estimate. This is a *much* stronger signal than
+  self-play, so solving even a handful of puzzles and training from them
+  is worth trying before judging the AI's strength. Complements self-play
+  rather than replacing it — the two share the same underlying weights,
+  and can both keep contributing over time as you solve more puzzles.
+- Expect **modest** results from self-play alone, especially before much
+  training — this is a genuine but simple learner, not a solver (that's
+  what the Solver above is for). It should trend toward better foundation
+  progress with more training, but a linear evaluator likely won't
+  reliably win full games from self-play signal alone. See
+  `Models/SolitaireAI.swift` for both training loops and
   `Models/BoardEvaluator.swift` for the learning rule.
 
 ## Project layout
@@ -148,8 +162,10 @@ Sources/FortunesFoundation/
     GameState.swift             game state, move/auto-move rules, undo/redo
     BoardFeatures.swift         hand-crafted features for the AI
     BoardEvaluator.swift        linear value function + TD(0) update
-    SolitaireAI.swift           self-play training loop, move suggestion
+    SolitaireAI.swift           self-play + puzzle-based training, move suggestion
     BruteForceSolver.swift      exhaustive search for a winning sequence
+    SolvedPuzzleRecord.swift    a solved puzzle (seed + start + moves)
+    PuzzleDatabase.swift        on-disk store of solved puzzles
   Views/
     ContentView.swift           top-level layout
     CardView.swift               single card rendering

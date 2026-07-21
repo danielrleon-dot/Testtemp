@@ -97,13 +97,32 @@ about without a compiler to check it.
 ## Solver (BruteForceSolver)
 
 Deliberately **separate** from SolitaireAI — a different kind of tool
-(exact exhaustive search vs. a learned approximation), not a competing
-implementation of it. Depth-first search with backtracking from the
-board the player currently has open; the only pruning beyond pure brute
-force is skipping board positions already proven fruitless earlier in
-the *same* search (`stateKey(for:)`, a canonical string over every pile
-in order — order matters for legality, so it's not just set membership).
-That doesn't skip any reachable win, just redundant re-exploration.
+(exact search vs. a learned approximation), not a competing
+implementation of it. Two interchangeable strategies, chosen at
+`solve()` time via `Strategy`, sharing everything else (pause/resume,
+cancellation, undo-tracked playback):
+
+- `.depthFirst` (UI: "Basic") — the original approach: an explicit
+  `[Frame]` stack, try a move, descend, backtrack, trying moves in
+  whatever order `legalMoves()` produces.
+- `.bestFirst` (UI: "Smart") — a priority queue (`MinHeap<Node>`, a
+  hand-rolled binary heap — Swift has no stdlib priority queue) ordered
+  by `heuristic(for:)`, always expanding the most-promising-looking
+  frontier position next instead of a fixed order. The heuristic
+  (cards remaining, empty columns, longest movable run, Reserve
+  occupancy) is deliberately **its own**, not SolitaireAI's evaluator —
+  an untrained evaluator scores everything ~0, which would make the
+  ordering meaningless. Bounded by `maxFrontierSize` (200,000) as a
+  memory safety valve, since unlike the DFS stack (bounded by search
+  depth) the frontier can otherwise grow very large; hitting that cap
+  reports `.pausedAtDeadline` just like a real timeout.
+
+Both are exhaustive if run to completion — an empty frontier proves no
+solution exists either way — and both only prune by skipping board
+positions already proven fruitless earlier in the *same* search
+(`stateKey(for:)`, a canonical string over every pile in order — order
+matters for legality, so it's not just set membership). That doesn't
+skip any reachable win, just redundant re-exploration.
 
 - Requires a hard wall-clock time limit (the project owner explicitly
   asked for this) — this game's search space is large enough that
@@ -111,10 +130,11 @@ That doesn't skip any reachable win, just redundant re-exploration.
   Hitting the deadline **pauses** rather than abandons the search (see
   below) — the UI calls it "paused... inconclusive so far," not
   "unsolvable."
-- `SearchSession` (worker `GameState` + `visited`/`stack`/`path`) and the
+- `SearchSession` (worker `GameState` + `visited`, plus either
+  `dfsStack`/`dfsPath` or `bestFirstHeap` depending on strategy) and the
   `SearchProgress` counter are both kept alive across a pause instead of
   being recreated, specifically so `continueSearching(timeLimit:)` can
-  resume with the exact same explored-state set and search stack, plus a
+  resume with the exact same explored-state set and frontier, plus a
   fresh deadline — not a restart. Only `cancel()` (Stop) or starting a new
   `solve()` discards them; hitting the deadline does not.
   `cumulativeElapsedSeconds` likewise accumulates across pause/continue
@@ -122,14 +142,15 @@ That doesn't skip any reachable win, just redundant re-exploration.
 - Runs on its own background `DispatchQueue`, entirely against a scratch
   `GameState` restored from a snapshot of the player's board — never
   mutates the live game during the search itself.
-- The search (`iterativeSearch`) is iterative with an explicit
-  heap-allocated `[Frame]` stack, not recursive. A first version used
-  plain recursion and crashed with `EXC_BAD_ACCESS` on real hardware —
-  background `DispatchQueue` worker threads get a much smaller default
-  stack than the main thread, and this game can need thousands of moves
-  of depth before backtracking, which overflowed it. Don't reintroduce
-  recursion here without solving that problem some other way (e.g. a
-  dedicated `Thread` with an explicit larger `stackSize`).
+- Both searches (`runDepthFirstSearch`, `runBestFirstSearch`) are
+  iterative with an explicit heap-allocated frontier, not recursive. A
+  first version used plain recursion and crashed with `EXC_BAD_ACCESS` on
+  real hardware — background `DispatchQueue` worker threads get a much
+  smaller default stack than the main thread, and this game can need
+  thousands of moves of depth before backtracking, which overflowed it.
+  Don't reintroduce recursion here without solving that problem some
+  other way (e.g. a dedicated `Thread` with an explicit larger
+  `stackSize`).
 - Progress (`statesExplored`, `elapsedSeconds`) crosses threads via a
   small lock-backed `SearchProgress` class polled by a main-thread
   `Timer`, not raw shared-state access — the search loop runs as one

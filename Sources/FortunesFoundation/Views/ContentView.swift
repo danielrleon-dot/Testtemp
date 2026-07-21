@@ -6,6 +6,7 @@ struct ContentView: View {
     @StateObject private var solver = BruteForceSolver()
     @State private var seedInput: String = ""
     @State private var solverTimeLimit: Double = 30
+    @State private var solverStrategy: BruteForceSolver.Strategy = .bestFirst
 
     var body: some View {
         ZStack {
@@ -175,8 +176,14 @@ struct ContentView: View {
     }
 
     /// Separate from the AI: this is exhaustive search, not a learned
-    /// approximation, and is expected to time out inconclusively on most
-    /// positions given how large this game's search space is.
+    /// approximation. "Basic" tries moves in a fixed order (pure
+    /// backtracking); "Smart" uses a priority queue ordered by a
+    /// heuristic estimate of closeness to a win, so it's much more likely
+    /// to find a solution before the time limit — both still exhaustive
+    /// if given enough time (an empty search space proves no solution
+    /// exists either way), and both commonly time out inconclusively on a
+    /// position that's still early/complex, given how large this game's
+    /// search space is.
     private var solverPanel: some View {
         HStack(spacing: 12) {
             Text("Solver:")
@@ -185,6 +192,15 @@ struct ContentView: View {
                 .font(.system(.body, design: .monospaced))
                 .foregroundColor(.white.opacity(0.85))
                 .lineLimit(1)
+
+            Picker("", selection: $solverStrategy) {
+                ForEach(BruteForceSolver.Strategy.allCases) { strategy in
+                    Text(strategy.rawValue).tag(strategy)
+                }
+            }
+            .pickerStyle(.menu)
+            .frame(width: 80)
+            .disabled(solver.status == .searching)
 
             Picker("", selection: $solverTimeLimit) {
                 Text("10s").tag(10.0)
@@ -202,7 +218,7 @@ struct ContentView: View {
                 }
             } else {
                 historyButton(title: "Solve Current Game", systemImage: "magnifyingglass", color: .indigo, enabled: !game.isWon) {
-                    solver.solve(from: game, timeLimit: solverTimeLimit)
+                    solver.solve(from: game, timeLimit: solverTimeLimit, strategy: solverStrategy)
                 }
             }
 

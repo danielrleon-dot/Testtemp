@@ -75,22 +75,35 @@ The "AI" row has a self-play reinforcement-learning agent:
 
 ## Solver
 
-The "Solver" row is a **separate** tool from the AI: an exhaustive
-depth-first search (try a move, recurse, backtrack) for a winning move
-sequence from the game currently on screen — no learning, no
-approximation, just brute force (with duplicate-position skipping, since
-a position already proven fruitless is fruitless no matter how it's
-reached — that doesn't skip any reachable win).
+The "Solver" row is a **separate** tool from the AI: exact search for a
+winning move sequence from the game currently on screen — no learning, no
+approximation. It offers two strategies:
 
-- Pick a **time limit** (10s/30s/60s/2m), then **Solve Current Game**. It
-  searches in the background — your board stays interactive.
-- This game's search space is astronomically large, so most positions
-  will very likely just hit the time limit rather than reach a definitive
-  answer, especially at 10-30s. Hitting it **pauses** the search rather
-  than throwing it away — press **Continue** to keep going with another
-  time budget, picking up exactly where it left off (explored states and
-  all), instead of starting over from scratch. Keep pressing Continue to
-  keep accumulating search time.
+- **Basic** — pure depth-first search with backtracking (try a move,
+  descend, backtrack if it leads nowhere), trying moves in a fixed order.
+- **Smart** — best-first search: keeps a priority queue of every
+  candidate position found so far, always expanding whichever one a
+  heuristic (cards home, empty columns, longest movable run, whether the
+  Reserve is free) rates closest to a win next, instead of a fixed order.
+  Much more likely to find a solution before the time limit, at the cost
+  of holding more candidate positions in memory at once (it self-limits
+  past 200,000 pending positions rather than growing unbounded).
+
+Both skip re-exploring a board position already proven fruitless earlier
+in the same search (that doesn't skip any reachable win, just redundant
+re-exploration), and both are still exhaustive if given enough time — an
+empty search space proves no solution exists either way.
+
+- Pick a **strategy** and a **time limit** (10s/30s/60s/2m), then
+  **Solve Current Game**. It searches in the background — your board
+  stays interactive.
+- This game's search space is astronomically large, so most positions —
+  especially with Basic, and especially at 10-30s — will very likely just
+  hit the time limit rather than reach a definitive answer. Hitting it
+  **pauses** the search rather than throwing it away — press **Continue**
+  to keep going with another time budget, picking up exactly where it
+  left off (explored states and all), instead of starting over from
+  scratch. Keep pressing Continue to keep accumulating search time.
 - If it finds a win, **Play Next Move** steps through the solution on
   your actual board, one move at a time (through the normal Undo-tracked
   path, so you can undo it like any other move).

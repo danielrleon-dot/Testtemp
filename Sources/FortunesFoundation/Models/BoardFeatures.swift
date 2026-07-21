@@ -18,8 +18,9 @@ enum BoardFeatures {
     }
 
     /// Length of the consecutive-rank, same-colour-or-all-trump run ending
-    /// at this column's apparent card — how much could move together.
-    private static func chainLength(in column: [Card]) -> Int {
+    /// at this column's apparent card — how much could move together. Not
+    /// private: BruteForceSolver's best-first heuristic reuses this too.
+    static func chainLength(in column: [Card]) -> Int {
         guard let apparent = column.last else { return 0 }
         var length = 1
         var current = apparent

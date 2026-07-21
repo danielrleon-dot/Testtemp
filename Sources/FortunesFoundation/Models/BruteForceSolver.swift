@@ -1,11 +1,22 @@
 import Foundation
 
-/// Exhaustive depth-first search for a winning move sequence from a given
-/// board — no learning, no evaluation function, just try a move, recurse,
-/// backtrack if it leads nowhere. The only thing pruning it beyond pure
-/// brute force is skipping board states already proven fruitless earlier
-/// in the same search (a state that leads nowhere once leads nowhere any
-/// other time it's reached), which doesn't skip any reachable win.
+/// Searches for a winning move sequence from a given board, using either
+/// of two strategies that share the same pause/resume/cancel machinery:
+///
+/// - **Depth-first** (`.depthFirst`): try a move, descend, backtrack if it
+///   leads nowhere — pure exhaustive search, tries moves in a fixed order.
+/// - **Best-first** (`.bestFirst`): keep a priority queue of every
+///   frontier position seen so far, always expanding whichever one a
+///   heuristic thinks is closest to a win next. Still exhaustive if run
+///   to completion (an empty frontier still proves no solution exists),
+///   but far more likely to *find* a solution quickly, at the cost of
+///   holding many more candidate positions in memory at once (bounded by
+///   `maxFrontierSize`, past which it pauses rather than growing forever).
+///
+/// Both are separate from SolitaireAI on purpose: this is exact search,
+/// not a learned approximation. The heuristic best-first uses is its own
+/// hand-crafted estimate (not the AI's evaluator), so it's just as useful
+/// whether or not the AI has ever been trained.
 ///
 /// This game's search space is astronomically large, so genuinely
 /// exhaustive completion isn't realistic for most positions within any
@@ -13,16 +24,20 @@ import Foundation
 /// hitting it **pauses** the search rather than abandoning it: all
 /// explored states and search progress are kept, and `continueSearching`
 /// resumes exactly where it left off with a fresh time budget. Only an
-/// explicit `cancel()` (or starting a new search) discards it. Separate
-/// from SolitaireAI on purpose: this is a different kind of tool (exact
-/// search vs. a learned approximation), not a competing implementation.
+/// explicit `cancel()` (or starting a new search) discards it.
 ///
-/// The search is iterative (an explicit heap-allocated stack), not
+/// Both searches are iterative (an explicit heap-allocated frontier), not
 /// recursive: background DispatchQueue worker threads get a much smaller
 /// default stack than the main thread, and a hard-to-solve board can
 /// easily need thousands of moves of depth before backtracking — a
 /// straightforward recursive version overflowed that stack in practice.
 final class BruteForceSolver: ObservableObject {
+    enum Strategy: String, CaseIterable, Identifiable {
+        case depthFirst = "Basic"
+        case bestFirst = "Smart"
+        var id: String { rawValue }
+    }
+
     enum Status: Equatable {
         case idle
         case searching
@@ -44,6 +59,11 @@ final class BruteForceSolver: ObservableObject {
     private var session: SearchSession?
     private var progressTimer: Timer?
     private var cumulativeElapsedSeconds: TimeInterval = 0
+
+    /// Past this many pending positions, best-first search pauses rather
+    /// than growing its frontier further — a safety valve against
+    /// unbounded memory growth on a very long / very open search.
+    private static let maxFrontierSize = 200_000
 
     /// Thread-safe (lock-backed) counter + cancel flag: the search loop on
     /// the background queue writes to it continuously; the main-thread
@@ -69,28 +89,38 @@ final class BruteForceSolver: ObservableObject {
         }
     }
 
-    /// One level of the explicit search stack: the board state at this
-    /// level, and the moves from it still left to try.
+    /// One level of the depth-first search's explicit stack: the board
+    /// state at this level, and the moves from it still left to try.
     private struct Frame {
         let snapshot: GameState.GameSnapshot
         var remainingMoves: [Move]
+    }
+
+    /// One entry in the best-first search's priority queue: a candidate
+    /// position, the moves that reached it, and how promising it looks
+    /// (lower is better — see `heuristic(for:)`).
+    private struct Node {
+        let snapshot: GameState.GameSnapshot
+        let path: [Move]
+        let heuristicValue: Double
     }
 
     /// Everything a search needs to resume exactly where it paused. A
     /// class (not a struct) so the background queue can mutate it in
     /// place across the lifetime of one solve()...continueSearching()...
     /// chain without it needing to flow back out through return values.
+    /// Exactly one of the two frontier representations is populated,
+    /// matching whichever Strategy the search was started with.
     private final class SearchSession {
         let worker: GameState
         var visited: Set<String>
-        var stack: [Frame]
-        var path: [Move]
+        var dfsStack: [Frame]?
+        var dfsPath: [Move]?
+        var bestFirstHeap: MinHeap<Node>?
 
-        init(worker: GameState, visited: Set<String>, stack: [Frame], path: [Move]) {
+        init(worker: GameState, visited: Set<String>) {
             self.worker = worker
             self.visited = visited
-            self.stack = stack
-            self.path = path
         }
     }
 
@@ -101,11 +131,11 @@ final class BruteForceSolver: ObservableObject {
         case cancelled
     }
 
-    /// Starts a brand-new exhaustive search from `game`'s current
-    /// position, discarding any previously paused search. Runs on a
-    /// background queue against its own scratch GameState — `game` itself
-    /// is only read once (via a snapshot) and never touched again.
-    func solve(from game: GameState, timeLimit: TimeInterval) {
+    /// Starts a brand-new search from `game`'s current position, discarding
+    /// any previously paused search. Runs on a background queue against
+    /// its own scratch GameState — `game` itself is only read once (via a
+    /// snapshot) and never touched again.
+    func solve(from game: GameState, timeLimit: TimeInterval, strategy: Strategy) {
         guard status != .searching else { return }
 
         let snapshot = game.currentSnapshot()
@@ -127,17 +157,29 @@ final class BruteForceSolver: ObservableObject {
         var visited = Set<String>()
         visited.insert(stateKey(for: worker))
         newProgress.incrementExplored()
-        let initialFrame = Frame(snapshot: worker.currentSnapshot(), remainingMoves: worker.legalMoves())
+
+        let newSession = SearchSession(worker: worker, visited: visited)
+        switch strategy {
+        case .depthFirst:
+            newSession.dfsStack = [Frame(snapshot: worker.currentSnapshot(), remainingMoves: worker.legalMoves())]
+            newSession.dfsPath = []
+        case .bestFirst:
+            var heap = MinHeap<Node> { $0.heuristicValue < $1.heuristicValue }
+            heap.insert(Node(snapshot: worker.currentSnapshot(), path: [], heuristicValue: heuristic(for: worker)))
+            newSession.bestFirstHeap = heap
+        }
 
         progress = newProgress
-        session = SearchSession(worker: worker, visited: visited, stack: [initialFrame], path: [])
+        session = newSession
 
         runCurrentSearch(timeLimit: timeLimit)
     }
 
-    /// Resumes a search that paused after hitting its time limit, with a
-    /// fresh time budget. Does nothing if there's no paused search to
-    /// resume (e.g. it was cancelled, solved, or already exhausted).
+    /// Resumes a search that paused after hitting its time limit or its
+    /// frontier size cap, with a fresh time budget, using whichever
+    /// strategy it was originally started with. Does nothing if there's no
+    /// paused search to resume (e.g. it was cancelled, solved, or already
+    /// exhausted).
     func continueSearching(timeLimit: TimeInterval) {
         guard case .paused = status, session != nil, progress != nil else { return }
         runCurrentSearch(timeLimit: timeLimit)
@@ -160,7 +202,12 @@ final class BruteForceSolver: ObservableObject {
 
         searchQueue.async { [weak self] in
             guard let self else { return }
-            let outcome = self.runIterativeSearch(session: session, progress: progress, deadline: deadline)
+            let outcome: SearchOutcome
+            if session.dfsStack != nil {
+                outcome = self.runDepthFirstSearch(session: session, progress: progress, deadline: deadline)
+            } else {
+                outcome = self.runBestFirstSearch(session: session, progress: progress, deadline: deadline)
+            }
             let exploredCount = progress.statesExplored
             let totalElapsed = baseElapsed + Date().timeIntervalSince(runStartedAt)
 
@@ -195,35 +242,101 @@ final class BruteForceSolver: ObservableObject {
     /// Depth-first search with an explicit stack instead of recursion,
     /// mutating `session` in place so its contents remain valid for a
     /// future continueSearching() call if this run pauses.
-    private func runIterativeSearch(session: SearchSession, progress: SearchProgress, deadline: Date) -> SearchOutcome {
-        while let topIndex = session.stack.indices.last {
-            if progress.isCancelled { return .cancelled }
-            if Date() >= deadline { return .pausedAtDeadline }
+    private func runDepthFirstSearch(session: SearchSession, progress: SearchProgress, deadline: Date) -> SearchOutcome {
+        guard var stack = session.dfsStack, var path = session.dfsPath else { return .exhausted }
+        var outcome: SearchOutcome = .exhausted
 
-            guard !session.stack[topIndex].remainingMoves.isEmpty else {
+        searchLoop: while let topIndex = stack.indices.last {
+            if progress.isCancelled { outcome = .cancelled; break searchLoop }
+            if Date() >= deadline { outcome = .pausedAtDeadline; break searchLoop }
+
+            guard !stack[topIndex].remainingMoves.isEmpty else {
                 // No moves left to try from this level — back up one level.
-                session.stack.removeLast()
-                if !session.path.isEmpty { session.path.removeLast() }
+                stack.removeLast()
+                if !path.isEmpty { path.removeLast() }
                 continue
             }
 
-            let move = session.stack[topIndex].remainingMoves.removeLast()
-            session.worker.restore(session.stack[topIndex].snapshot)
+            let move = stack[topIndex].remainingMoves.removeLast()
+            session.worker.restore(stack[topIndex].snapshot)
             guard session.worker.performMove(move, recordForUndo: false) else { continue }
-            session.path.append(move)
+            path.append(move)
 
-            if session.worker.isWon { return .solved(path: session.path) }
+            if session.worker.isWon {
+                outcome = .solved(path: path)
+                break searchLoop
+            }
 
             let key = stateKey(for: session.worker)
             if session.visited.contains(key) {
-                session.path.removeLast()
+                path.removeLast()
                 continue
             }
             session.visited.insert(key)
             progress.incrementExplored()
-            session.stack.append(Frame(snapshot: session.worker.currentSnapshot(), remainingMoves: session.worker.legalMoves()))
+            stack.append(Frame(snapshot: session.worker.currentSnapshot(), remainingMoves: session.worker.legalMoves()))
         }
-        return .exhausted
+
+        session.dfsStack = stack
+        session.dfsPath = path
+        return outcome
+    }
+
+    /// Best-first (greedy) search: always expands whichever frontier
+    /// position the heuristic currently rates most promising, rather than
+    /// exploring in a fixed order. Still visits every reachable
+    /// non-duplicate state if run to exhaustion (same completeness
+    /// guarantee as depth-first — an empty frontier still proves no
+    /// solution exists), just in a much more useful order in practice.
+    private func runBestFirstSearch(session: SearchSession, progress: SearchProgress, deadline: Date) -> SearchOutcome {
+        guard var heap = session.bestFirstHeap else { return .exhausted }
+        var outcome: SearchOutcome = .exhausted
+
+        searchLoop: while !heap.isEmpty {
+            if progress.isCancelled { outcome = .cancelled; break searchLoop }
+            if Date() >= deadline { outcome = .pausedAtDeadline; break searchLoop }
+            if heap.count > Self.maxFrontierSize { outcome = .pausedAtDeadline; break searchLoop }
+            guard let node = heap.popMin() else { break searchLoop }
+
+            session.worker.restore(node.snapshot)
+            if session.worker.isWon {
+                outcome = .solved(path: node.path)
+                break searchLoop
+            }
+
+            for move in session.worker.legalMoves() {
+                session.worker.restore(node.snapshot)
+                guard session.worker.performMove(move, recordForUndo: false) else { continue }
+
+                let childPath = node.path + [move]
+                if session.worker.isWon {
+                    outcome = .solved(path: childPath)
+                    break searchLoop
+                }
+
+                let key = stateKey(for: session.worker)
+                if session.visited.contains(key) { continue }
+                session.visited.insert(key)
+                progress.incrementExplored()
+                heap.insert(Node(snapshot: session.worker.currentSnapshot(), path: childPath, heuristicValue: heuristic(for: session.worker)))
+            }
+        }
+
+        session.bestFirstHeap = heap
+        return outcome
+    }
+
+    /// Estimated distance-to-win for a board: lower is more promising.
+    /// Deliberately its own hand-crafted heuristic rather than the AI's
+    /// evaluator — the solver needs to be useful even if the AI has never
+    /// been trained (an untrained evaluator would score everything ~0 and
+    /// make this ordering meaningless).
+    private func heuristic(for game: GameState) -> Double {
+        let cardsRemaining = Double(70 - game.foundationCardCount)
+        let emptyColumns = Double(game.tableau.filter { $0.isEmpty }.count)
+        let longestRun = Double(game.tableau.map(BoardFeatures.chainLength).max() ?? 0)
+        let reservePenalty: Double = game.reserve == nil ? 0 : 1
+        return cardsRemaining - 0.5 * emptyColumns - 0.3 * longestRun + reservePenalty
     }
 
     /// Stops an in-progress search early and discards it (unlike hitting
@@ -272,6 +385,64 @@ final class BruteForceSolver: ObservableObject {
         switch card.kind {
         case .colour(let colour, let rank): return "\(colour.rawValue)\(rank.rawValue)"
         case .trump(let n): return "T\(n)"
+        }
+    }
+}
+
+/// A minimal binary min-heap: `popMin()` always returns the element for
+/// which `areInIncreasingOrder` ranks it lowest. Used by BruteForceSolver's
+/// best-first search as its priority queue — a plain sorted array would
+/// cost O(n) per insert/pop once the frontier grows large; this keeps both
+/// O(log n).
+private struct MinHeap<Element> {
+    private var items: [Element] = []
+    private let areInIncreasingOrder: (Element, Element) -> Bool
+
+    init(areInIncreasingOrder: @escaping (Element, Element) -> Bool) {
+        self.areInIncreasingOrder = areInIncreasingOrder
+    }
+
+    var isEmpty: Bool { items.isEmpty }
+    var count: Int { items.count }
+
+    mutating func insert(_ element: Element) {
+        items.append(element)
+        siftUp(from: items.count - 1)
+    }
+
+    mutating func popMin() -> Element? {
+        guard !items.isEmpty else { return nil }
+        items.swapAt(0, items.count - 1)
+        let result = items.removeLast()
+        if !items.isEmpty { siftDown(from: 0) }
+        return result
+    }
+
+    private mutating func siftUp(from index: Int) {
+        var child = index
+        while child > 0 {
+            let parent = (child - 1) / 2
+            guard areInIncreasingOrder(items[child], items[parent]) else { break }
+            items.swapAt(child, parent)
+            child = parent
+        }
+    }
+
+    private mutating func siftDown(from index: Int) {
+        var parent = index
+        while true {
+            let left = 2 * parent + 1
+            let right = 2 * parent + 2
+            var candidate = parent
+            if left < items.count, areInIncreasingOrder(items[left], items[candidate]) {
+                candidate = left
+            }
+            if right < items.count, areInIncreasingOrder(items[right], items[candidate]) {
+                candidate = right
+            }
+            guard candidate != parent else { return }
+            items.swapAt(parent, candidate)
+            parent = candidate
         }
     }
 }

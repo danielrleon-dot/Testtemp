@@ -197,14 +197,14 @@ struct ContentView: View {
     }
 
     /// Separate from the AI: this is exhaustive search, not a learned
-    /// approximation. "Basic" tries moves in a fixed order (pure
-    /// backtracking); "Smart" uses a priority queue ordered by a
-    /// heuristic estimate of closeness to a win, so it's much more likely
-    /// to find a solution before the time limit — both still exhaustive
-    /// if given enough time (an empty search space proves no solution
-    /// exists either way), and both commonly time out inconclusively on a
-    /// position that's still early/complex, given how large this game's
-    /// search space is.
+    /// approximation. "Basic" is backtracking with an explicit stack,
+    /// trying each branch's most-promising move first; "Smart" uses a
+    /// priority queue ordered by the same heuristic estimate of closeness
+    /// to a win, so it's generally still more likely to find a solution
+    /// before the time limit — both still exhaustive if given enough time
+    /// (an empty search space proves no solution exists either way), and
+    /// both can still time out inconclusively on a position that's
+    /// large/complex enough, given how large this game's search space is.
     private var solverPanel: some View {
         HStack(spacing: 12) {
             Text("Solver:")

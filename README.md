@@ -79,8 +79,10 @@ The "Solver" row is a **separate** tool from the AI: exact search for a
 winning move sequence from the game currently on screen — no learning, no
 approximation. It offers two strategies:
 
-- **Basic** — pure depth-first search with backtracking (try a move,
-  descend, backtrack if it leads nowhere), trying moves in a fixed order.
+- **Basic** — depth-first search with backtracking (try a move, descend,
+  backtrack if it leads nowhere), but each branch tries its most
+  promising-looking move first (by the same heuristic "Smart" uses)
+  rather than in an arbitrary order.
 - **Smart** — best-first search: keeps a priority queue of every
   candidate position found so far, always expanding whichever one a
   heuristic (cards home, empty columns, longest movable run, whether the

@@ -159,9 +159,18 @@ implementation of it. Two interchangeable strategies, chosen at
 `solve()` time via `Strategy`, sharing everything else (pause/resume,
 cancellation, undo-tracked playback):
 
-- `.depthFirst` (UI: "Basic") — the original approach: an explicit
-  `[Frame]` stack, try a move, descend, backtrack, trying moves in
-  whatever order `legalMoves()` produces.
+- `.depthFirst` (UI: "Basic") — an explicit `[Frame]` stack, try a move,
+  descend, backtrack. No longer a *naive* fixed order, though: each
+  branch's candidate moves are pre-scored with the same heuristic
+  best-first uses (`orderedByHeuristic(_:from:worker:)`) and tried
+  most-promising-first, instead of whatever arbitrary order
+  `legalMoves()` happened to produce. Confirmed experimentally (same
+  Python reimplementation, same 40 test deals) to meaningfully help:
+  solve rate 22.5% -> 32.5%, timeouts 20.0% -> 10.0%, average states to
+  find a win roughly halved. Still a fundamentally different algorithm
+  from best-first (a backtracking stack, not a priority queue over the
+  whole frontier) — this only changes the order moves are *tried* in at
+  each branch, not what eventually gets explored.
 - `.bestFirst` (UI: "Smart") — a priority queue (`MinHeap<Node>`, a
   hand-rolled binary heap — Swift has no stdlib priority queue) ordered
   by `heuristic(for:)`, always expanding the most-promising-looking

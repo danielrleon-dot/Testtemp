@@ -206,6 +206,45 @@ final class BruteForceSolver: ObservableObject {
         runCurrentSearch(timeLimit: timeLimit)
     }
 
+    /// One-shot, non-resumable best-first solve: builds a fresh worker and
+    /// session from `snapshot`, searches for up to `timeLimit`, and returns
+    /// the winning move sequence if found within that budget — nil either
+    /// way otherwise, whether the position was genuinely proven unsolvable
+    /// or the search simply ran out of time. Used by PuzzleGenerator's
+    /// bulk "generate solved puzzles" batch, which always abandons a deal
+    /// after one bounded attempt rather than pausing/resuming it, so this
+    /// deliberately bypasses `solve()`'s session/progress/@Published
+    /// machinery entirely — it's synchronous and meant to be called from a
+    /// background thread already, never from the interactive single-game
+    /// UI flow (it doesn't touch `status`/`session`/`progress` at all, so
+    /// it's safe to call even while an interactive search is in progress
+    /// on this same instance).
+    func attemptSolve(from snapshot: GameState.GameSnapshot, timeLimit: TimeInterval) -> [Move]? {
+        let worker = GameState(seed: 0)
+        worker.restore(snapshot)
+        if worker.isWon { return [] }
+
+        let oneShotProgress = SearchProgress()
+        var visited = Set<String>()
+        visited.insert(stateKey(for: worker))
+        oneShotProgress.incrementExplored()
+
+        let oneShotSession = SearchSession(worker: worker, visited: visited)
+        var heap = MinHeap<Node> { $0.heuristicValue < $1.heuristicValue }
+        heap.insert(Node(snapshot: worker.currentSnapshot(), path: [], heuristicValue: heuristic(for: worker)))
+        oneShotSession.bestFirstHeap = heap
+
+        let outcome = runBestFirstSearch(
+            session: oneShotSession,
+            progress: oneShotProgress,
+            deadline: Date().addingTimeInterval(timeLimit)
+        )
+        if case .solved(let path) = outcome {
+            return path
+        }
+        return nil
+    }
+
     /// Resumes a search that paused after hitting its time limit or its
     /// frontier size cap, with a fresh time budget, using whichever
     /// strategy it was originally started with. Does nothing if there's no

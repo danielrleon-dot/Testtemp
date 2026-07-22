@@ -4,6 +4,7 @@ struct ContentView: View {
     @StateObject private var game = GameState()
     @StateObject private var ai = SolitaireAI()
     @StateObject private var solver = BruteForceSolver()
+    @StateObject private var puzzleGenerator = PuzzleGenerator()
     @StateObject private var puzzleDatabase = PuzzleDatabase()
     @State private var seedInput: String = ""
     @State private var solverTimeLimit: Double = 30
@@ -15,6 +16,7 @@ struct ContentView: View {
                 header
                 aiPanel
                 solverPanel
+                puzzleGeneratorPanel
                 foundationRow
                 tableauRow
                 Spacer()
@@ -285,6 +287,57 @@ struct ContentView: View {
         case .cancelled(let explored):
             return "stopped (explored \(explored) states)"
         }
+    }
+
+    /// Bulk, unattended puzzle generation: deals fresh random games and
+    /// tries to solve each with a short per-game budget, abandoning
+    /// (rather than resuming) any that don't solve in time and moving
+    /// straight to a new deal — separate from, and independent of, the
+    /// interactive Solver row above. Stops at 10 newly solved puzzles or
+    /// 2 minutes total, whichever comes first.
+    private var puzzleGeneratorPanel: some View {
+        HStack(spacing: 12) {
+            Text("Generate:")
+                .foregroundColor(.white.opacity(0.6))
+            Text(puzzleGeneratorSummary)
+                .font(.system(.body, design: .monospaced))
+                .foregroundColor(.white.opacity(0.85))
+                .lineLimit(1)
+
+            Button {
+                puzzleGenerator.generate { records in
+                    for record in records {
+                        puzzleDatabase.add(record)
+                    }
+                }
+            } label: {
+                HStack(spacing: 6) {
+                    if puzzleGenerator.isGenerating {
+                        ProgressView()
+                            .controlSize(.small)
+                            .tint(.white)
+                    }
+                    Text(puzzleGenerator.isGenerating ? "Generating…" : "Generate 10 Puzzles")
+                }
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundColor(.white)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(puzzleGenerator.isGenerating ? Color.gray.opacity(0.35) : Color.teal)
+                .clipShape(RoundedRectangle(cornerRadius: 6))
+            }
+            .buttonStyle(.plain)
+            .disabled(puzzleGenerator.isGenerating)
+
+            Spacer()
+        }
+        .padding(.horizontal, 24)
+    }
+
+    private var puzzleGeneratorSummary: String {
+        guard !puzzleGenerator.isGenerating else { return "generating…" }
+        guard puzzleGenerator.lastRunAttemptedCount > 0 else { return "idle" }
+        return "last run: \(puzzleGenerator.lastRunSolvedCount) solved (\(puzzleGenerator.lastRunAttemptedCount) attempted)"
     }
 
     private var foundationRow: some View {

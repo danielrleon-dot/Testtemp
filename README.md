@@ -126,6 +126,24 @@ empty search space proves no solution exists either way.
   time the app launches, rather than quietly teaching the AI an outdated
   game.
 
+## Generate Puzzles
+
+The "Generate:" row builds up the puzzle database in bulk, unattended,
+instead of one manual "Solve Current Game" click at a time:
+
+- **Generate 10 Puzzles** deals a fresh random game, tries to solve it
+  with a 10-second budget, and — solved or not — moves straight on to
+  another fresh deal (a deal that doesn't solve in time is abandoned, not
+  resumed). Stops at whichever comes first: 10 new puzzles solved, or 2
+  minutes total elapsed. Runs entirely in the background against its own
+  disposable boards, independently of anything happening in the
+  interactive Solver row above — you can use both at once.
+- Every puzzle found is added to the same on-disk database "Train from
+  Puzzles" reads from, so a single click here can meaningfully grow your
+  training data faster than solving games one at a time by hand.
+- The summary text shows the outcome of the last run once it finishes
+  (e.g. "6 solved (14 attempted)").
+
 ## AI
 
 The "AI" row has a self-play reinforcement-learning agent:
@@ -196,6 +214,7 @@ Sources/FortunesFoundation/
     BoardEvaluator.swift        linear value function + TD(0) update
     SolitaireAI.swift           self-play + puzzle-based training, move suggestion
     BruteForceSolver.swift      exhaustive search for a winning sequence
+    PuzzleGenerator.swift       bulk unattended puzzle generation
     SolvedPuzzleRecord.swift    a solved puzzle (seed + start + moves)
     PuzzleDatabase.swift        on-disk store of solved puzzles
     TrainingLogEntry.swift      one training-run record (weights + outcome)

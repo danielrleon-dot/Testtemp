@@ -271,6 +271,49 @@ order-independent.
   appended to `PuzzleDatabase` — the solver itself doesn't know the
   database exists, keeping the two independently testable.
 
+## Bulk puzzle generation (PuzzleGenerator)
+
+Added at the project owner's request for building up `PuzzleDatabase` in
+bulk, unattended, rather than one manual "Solve Current Game" click at a
+time. `PuzzleGenerator.generate(targetSolvedCount:perGameTimeLimit:
+totalTimeLimit:onSolved:)` (defaults: 10, 10s, 120s) deals a fresh random
+`GameState`, attempts `BruteForceSolver.attemptSolve(from:timeLimit:)` on
+it, and — whether that returns a solution or not — moves straight on to
+another fresh deal; a deal that doesn't solve within its per-game budget
+is abandoned outright, never resumed, matching the project owner's
+explicit spec ("try to solve with each time a time out of 10 sec and
+beyond move to a new game"). The whole batch stops at whichever comes
+first: `targetSolvedCount` new puzzles solved, or `totalTimeLimit`
+elapsed overall — each individual attempt's budget is further clamped to
+whatever's left of the total, so the process can't run meaningfully past
+its total time cap even if it's mid-search when that cap is reached.
+
+`attemptSolve` is a new, small addition to `BruteForceSolver` itself: a
+synchronous, one-shot best-first search that builds its own local
+`SearchSession`/`SearchProgress` and calls the existing
+`runBestFirstSearch` directly, entirely bypassing `solve()`'s
+pause/resume/`@Published status` machinery (it never touches `self.
+status`/`self.session`/`self.progress`). That makes it safe to call from
+a background loop without any risk of corrupting or racing with an
+interactive search the player might have running via the Solver row at
+the same time — and it's why `PuzzleGenerator` owns its own private
+`BruteForceSolver` instance rather than sharing the one `ContentView`
+uses for interactive solving, keeping the two fully decoupled.
+
+Reuses the existing best-first search, `stateKey`, and `heuristic`
+verbatim rather than duplicating any of that logic — deliberate, since
+this project's search code has already needed several subtle correctness
+fixes (the frontier-cap false negative, the column-index dedup
+inefficiency), and a second, drifted copy of the same algorithm would be
+exactly the kind of thing that quietly reintroduces one of those bugs the
+next time only one copy gets fixed.
+
+`generate(...)`'s `onSolved` callback fires once, on the main thread,
+after the whole batch completes — not progressively per solved puzzle —
+mirroring `SolitaireAI.train(episodes:)`'s own single-dispatch-at-the-end
+pattern for background work, which sidesteps any need to reason about
+partial-progress state being read from the wrong thread mid-run.
+
 ## Puzzle database (SolvedPuzzleRecord / PuzzleDatabase)
 
 Bridges the Solver and the AI: every puzzle the Solver proves winnable is
@@ -339,6 +382,7 @@ Sources/FortunesFoundation/
     BoardEvaluator.swift        linear value function + TD(0) update
     SolitaireAI.swift           self-play + puzzle-based training, move suggestion
     BruteForceSolver.swift      exhaustive search for a winning sequence
+    PuzzleGenerator.swift       bulk unattended puzzle generation
     SolvedPuzzleRecord.swift    a solved puzzle (seed + start + moves)
     PuzzleDatabase.swift        on-disk store of solved puzzles
     TrainingLogEntry.swift      one training-run record (weights + outcome)

@@ -166,11 +166,30 @@ struct ContentView: View {
             .buttonStyle(.plain)
             .disabled(ai.isTraining)
 
-            historyButton(title: "AI Move", systemImage: "sparkles", color: .purple, enabled: !ai.isTraining && !game.isWon) {
-                if let move = ai.suggestMove(for: game) {
-                    game.performMove(move, recordForUndo: true)
+            Button {
+                ai.suggestMove(for: game) { move in
+                    if let move {
+                        game.performMove(move, recordForUndo: true)
+                    }
                 }
+            } label: {
+                HStack(spacing: 6) {
+                    if ai.isThinking {
+                        ProgressView()
+                            .controlSize(.small)
+                            .tint(.white)
+                    }
+                    Label(ai.isThinking ? "Thinking…" : "AI Move", systemImage: "sparkles")
+                }
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundColor(.white)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background((ai.isTraining || ai.isThinking || game.isWon) ? Color.gray.opacity(0.35) : Color.purple)
+                .clipShape(RoundedRectangle(cornerRadius: 6))
             }
+            .buttonStyle(.plain)
+            .disabled(ai.isTraining || ai.isThinking || game.isWon)
 
             Text("· \(puzzleDatabase.records.count) solved puzzles")
                 .foregroundColor(.white.opacity(0.6))

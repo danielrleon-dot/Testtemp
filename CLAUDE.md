@@ -92,11 +92,38 @@ about without a compiler to check it.
   rate keeps sabotaging otherwise-good, near-complete games forever.
   `totalEpisodesTrained` is lifetime, persisted separately from the
   per-launch `gamesPlayed`/`gamesWon` session counters.
-- `SolitaireAI.suggestMove(for:)` runs synchronously on the caller's
-  thread (expected: main, via the "AI Move" button) and scores every
-  legal move by actually applying it to the passed-in live `GameState`,
-  reading the resulting value, then rolling it back via
-  snapshot/restore — so evaluation never leaves a trial move in place.
+- `SolitaireAI.suggestMove(for:timeLimit:completion:)` (the "AI Move"
+  button) is a bounded best-first search guided by the evaluator, *not*
+  greedy 1-ply comparison — that used to be `suggestMove`'s whole
+  implementation (still is, internally: see `bestMove(_:in:)`, kept for
+  self-play's per-move cost), but real training data proved it
+  fundamentally too weak for this game: even a well-tuned hand-crafted
+  heuristic (not this evaluator, a stronger, more established one) won
+  **zero of several known-solvable test deals** when used greedily, and
+  the real trained evaluator showed the identical symptom — zero
+  self-play wins across its *entire* training history (up to 5,800
+  lifetime episodes, 145 solved puzzles trained from) even after
+  supervised puzzle training visibly pulled `trumpProgress`/
+  `colourProgress` to solidly positive weights. Greedy 1-ply simply has
+  no way to recover from a locally-good-looking move that dead-ends many
+  moves later, which is the norm in a puzzle this deep — a value function
+  can be *correct about what's good* and still lose every game if it's
+  only ever allowed to look one step ahead.
+  `suggestMove` now runs on its own background queue against a scratch
+  `GameState`, exactly like `BruteForceSolver` (`isThinking` mirrors
+  `isTraining`/`BruteForceSolver.status == .searching` for the UI), and
+  reuses `GameState.canonicalStateKey()` and `BruteForceSolver.MinHeap`
+  directly rather than duplicating either — the search itself is the
+  same best-first shape as `BruteForceSolver.runBestFirstSearch`, just
+  scored by `evaluator.value(for:)` (higher-is-better) instead of the
+  solver's own heuristic (lower-is-better), and returning the first move
+  of whichever explored path scores highest instead of requiring an
+  outright win within budget. Self-play's own move selection during
+  training deliberately still uses the cheap greedy `bestMove(_:in:)` —
+  the search-guided path would be far too slow across the thousands of
+  per-move calls a training run makes, and puzzle-based training is
+  already the stronger lever for the evaluator itself regardless of how
+  moves get chosen at play time.
 - `SolitaireAI.trainFromSolvedPuzzles(_:)` is supervised training from
   `SolvedPuzzleRecord`s the solver has actually proven winnable (see
   below) — a much stronger signal than self-play, since every state on
@@ -206,11 +233,14 @@ cancellation, undo-tracked playback):
 Both are exhaustive if run to completion — an empty frontier proves no
 solution exists either way — and both only prune by skipping board
 positions already proven fruitless earlier in the *same* search
-(`stateKey(for:)`, a canonical string over every pile). That doesn't
-skip any reachable win, just redundant re-exploration.
+(`GameState.canonicalStateKey()`, a canonical string over every pile —
+moved onto `GameState` itself so `SolitaireAI`'s search-guided move
+selection can reuse the exact same, already-fixed logic instead of a
+second copy; see the AI section above). That doesn't skip any reachable
+win, just redundant re-exploration.
 
-`stateKey(for:)` sorts the tableau's column strings before joining them,
-rather than keeping them in column-index order — column index never
+`canonicalStateKey()` sorts the tableau's column strings before joining
+them, rather than keeping them in column-index order — column index never
 affects legality (`canPlace`/`legalMoves` only look at a column's
 *contents*), so two boards differing only by which physical column an
 interchangeable empty/single-card stack sits in are the same position for
@@ -300,13 +330,13 @@ the same time — and it's why `PuzzleGenerator` owns its own private
 `BruteForceSolver` instance rather than sharing the one `ContentView`
 uses for interactive solving, keeping the two fully decoupled.
 
-Reuses the existing best-first search, `stateKey`, and `heuristic`
-verbatim rather than duplicating any of that logic — deliberate, since
-this project's search code has already needed several subtle correctness
-fixes (the frontier-cap false negative, the column-index dedup
-inefficiency), and a second, drifted copy of the same algorithm would be
-exactly the kind of thing that quietly reintroduces one of those bugs the
-next time only one copy gets fixed.
+Reuses the existing best-first search, `canonicalStateKey`, and
+`heuristic` verbatim rather than duplicating any of that logic —
+deliberate, since this project's search code has already needed several
+subtle correctness fixes (the frontier-cap false negative, the
+column-index dedup inefficiency), and a second, drifted copy of the same
+algorithm would be exactly the kind of thing that quietly reintroduces
+one of those bugs the next time only one copy gets fixed.
 
 `generate(...)`'s `onSolved` callback fires once, on the main thread,
 after the whole batch completes — not progressively per solved puzzle —

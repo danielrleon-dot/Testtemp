@@ -184,7 +184,7 @@ final class BruteForceSolver: ObservableObject {
 
         let newProgress = SearchProgress()
         var visited = Set<String>()
-        visited.insert(stateKey(for: worker))
+        visited.insert(worker.canonicalStateKey())
         newProgress.incrementExplored()
 
         let newSession = SearchSession(worker: worker, visited: visited)
@@ -226,7 +226,7 @@ final class BruteForceSolver: ObservableObject {
 
         let oneShotProgress = SearchProgress()
         var visited = Set<String>()
-        visited.insert(stateKey(for: worker))
+        visited.insert(worker.canonicalStateKey())
         oneShotProgress.incrementExplored()
 
         let oneShotSession = SearchSession(worker: worker, visited: visited)
@@ -337,7 +337,7 @@ final class BruteForceSolver: ObservableObject {
                 break searchLoop
             }
 
-            let key = stateKey(for: session.worker)
+            let key = session.worker.canonicalStateKey()
             if session.visited.contains(key) {
                 path.removeLast()
                 continue
@@ -418,7 +418,7 @@ final class BruteForceSolver: ObservableObject {
                     break searchLoop
                 }
 
-                let key = stateKey(for: session.worker)
+                let key = session.worker.canonicalStateKey()
                 if session.visited.contains(key) { continue }
                 session.visited.insert(key)
                 progress.incrementExplored()
@@ -470,55 +470,16 @@ final class BruteForceSolver: ObservableObject {
     var hasMoreSolutionSteps: Bool {
         solutionStepsPlayed < solution.count
     }
-
-    /// Canonical string encoding of a board's full state, for deduplicating
-    /// already-explored positions. Each of the 70 cards has a unique
-    /// colour/rank-or-trump-number combination in this deck, so that alone
-    /// is enough to identify a card.
-    ///
-    /// Tableau columns are encoded and then **sorted** before joining —
-    /// deliberately throwing away which physical column index holds which
-    /// stack. Column index never affects legality (`canPlace`/`legalMoves`
-    /// only ever look at a column's *contents*, never its index), so two
-    /// boards that differ only by, say, which of several empty columns a
-    /// lone parked card sits in are the exact same position for every
-    /// purpose that matters to the search. Before this, the search treated
-    /// every such relabeling as a brand-new, never-before-seen state —
-    /// confirmed experimentally (an independent Python reimplementation,
-    /// same 40 test deals) to inflate exploration dramatically: solve rate
-    /// 10.0% -> 37.5%, average states needed to find a win 74,995 -> 11,218,
-    /// timeouts 35.0% -> 5.0%. Reserve/bottomTrump/topTrump/colourFoundations
-    /// are each a unique, non-interchangeable slot, so only the tableau
-    /// columns are canonicalized this way — everything else keeps its fixed
-    /// position in the key.
-    private func stateKey(for game: GameState) -> String {
-        var columnParts = game.tableau.map { $0.map(cardCode).joined(separator: ",") }
-        columnParts.sort()
-
-        var parts: [String] = columnParts
-        parts.append(game.reserve.map(cardCode) ?? "-")
-        parts.append(game.bottomTrump.map(cardCode).joined(separator: ","))
-        parts.append(game.topTrump.map(cardCode).joined(separator: ","))
-        for colour in Colour.allCases {
-            parts.append((game.colourFoundations[colour] ?? []).map(cardCode).joined(separator: ","))
-        }
-        return parts.joined(separator: "|")
-    }
-
-    private func cardCode(_ card: Card) -> String {
-        switch card.kind {
-        case .colour(let colour, let rank): return "\(colour.rawValue)\(rank.rawValue)"
-        case .trump(let n): return "T\(n)"
-        }
-    }
 }
 
 /// A minimal binary min-heap: `popMin()` always returns the element for
 /// which `areInIncreasingOrder` ranks it lowest. Used by BruteForceSolver's
 /// best-first search as its priority queue — a plain sorted array would
 /// cost O(n) per insert/pop once the frontier grows large; this keeps both
-/// O(log n).
-private struct MinHeap<Element> {
+/// O(log n). Not file-private: SolitaireAI's search-guided move selection
+/// reuses it too, rather than maintaining a second copy of the same
+/// small, easy-to-get-subtly-wrong data structure.
+struct MinHeap<Element> {
     private var items: [Element] = []
     private let areInIncreasingOrder: (Element, Element) -> Bool
 

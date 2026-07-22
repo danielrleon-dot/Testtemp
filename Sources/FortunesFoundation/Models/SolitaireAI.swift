@@ -14,11 +14,13 @@ final class SolitaireAI: ObservableObject {
     @Published private(set) var gamesPlayed: Int = 0
     @Published private(set) var gamesWon: Int = 0
     @Published private(set) var isTraining: Bool = false
+    @Published private(set) var isThinking: Bool = false
     @Published private(set) var totalEpisodesTrained: Int
 
     private let discount = 0.98
     private let maxStepsPerGame = 400
     private let trainingQueue = DispatchQueue(label: "SolitaireAI.training", qos: .utility)
+    private let searchQueue = DispatchQueue(label: "SolitaireAI.search", qos: .userInitiated)
     private let trainingLog = TrainingLog()
 
     private static let episodesKey = "SolitaireAI.totalEpisodesTrained"
@@ -145,15 +147,118 @@ final class SolitaireAI: ObservableObject {
         }
     }
 
+    /// One frontier entry for `suggestMove`'s lookahead search: a candidate
+    /// position, the moves that reached it from the current live game, and
+    /// how promising the evaluator currently thinks it is (higher is
+    /// better — the opposite convention from BruteForceSolver's own
+    /// heuristic, matching `BoardEvaluator.value(for:)`).
+    private struct SearchNode {
+        let snapshot: GameState.GameSnapshot
+        let path: [Move]
+        let value: Double
+    }
+
     /// Picks the AI's current best move for a live game, with no
-    /// training/weight updates. Returns nil if the board has no legal
-    /// move at all (a dead end). Runs synchronously on the calling
-    /// (expected: main) thread — it briefly mutates and rolls back the
-    /// passed-in game once per candidate move to score it.
-    func suggestMove(for game: GameState) -> Move? {
-        let moves = game.legalMoves()
-        guard !moves.isEmpty else { return nil }
-        return bestMove(moves, in: game)
+    /// training/weight updates, via a small bounded best-first search
+    /// guided by the evaluator — not by comparing only the immediate next
+    /// board (see `bestMove(_:in:)`, still used by self-play for speed).
+    ///
+    /// Confirmed experimentally that pure greedy 1-ply comparison is
+    /// fundamentally too weak for this game: even scored with a
+    /// well-tuned hand-crafted heuristic (not this evaluator, an even
+    /// better-established one), a greedy walk won zero of several
+    /// known-solvable test deals, and the real trained evaluator showed
+    /// the same thing — zero wins across an entire self-play history even
+    /// after 145 solved puzzles' worth of supervised training. Greedy
+    /// 1-ply has no way to recover from a locally-good-looking move that
+    /// dead-ends many moves later; a bounded search can at least route
+    /// around some of those traps instead of walking straight into them.
+    ///
+    /// Runs on a background queue against a scratch copy of `game` —
+    /// exactly like BruteForceSolver — so the UI stays responsive despite
+    /// taking up to `timeLimit` to respond, and the live game is only
+    /// touched once, when `completion` is called with the chosen move.
+    /// Falls back to plain greedy comparison in the (practically
+    /// never-hit, since `timeLimit` defaults to several seconds) case
+    /// where the search doesn't manage to expand even the root's
+    /// children before its deadline — this should always produce some
+    /// move rather than silently doing nothing.
+    func suggestMove(for game: GameState, timeLimit: TimeInterval = 2.0, completion: @escaping (Move?) -> Void) {
+        guard !isThinking else { completion(nil); return }
+        isThinking = true
+
+        let snapshot = game.currentSnapshot()
+        let evaluatorSnapshot = evaluator
+
+        searchQueue.async { [weak self] in
+            guard let self else { return }
+            let chosenMove = self.searchForMove(from: snapshot, timeLimit: timeLimit, evaluator: evaluatorSnapshot)
+            DispatchQueue.main.async {
+                self.isThinking = false
+                completion(chosenMove)
+            }
+        }
+    }
+
+    private func searchForMove(from snapshot: GameState.GameSnapshot, timeLimit: TimeInterval, evaluator: BoardEvaluator) -> Move? {
+        let worker = GameState(seed: 0)
+        worker.restore(snapshot)
+
+        let rootMoves = worker.legalMoves()
+        guard !rootMoves.isEmpty else { return nil }
+
+        let deadline = Date().addingTimeInterval(timeLimit)
+        var visited = Set<String>()
+        visited.insert(worker.canonicalStateKey())
+
+        // Ordered so popMin() always returns the *highest*-value node —
+        // the opposite of BruteForceSolver's min-first heuristic search,
+        // matching "higher evaluator value is more promising."
+        var heap = MinHeap<SearchNode> { $0.value > $1.value }
+        heap.insert(SearchNode(snapshot: snapshot, path: [], value: evaluator.value(for: BoardFeatures.extract(from: worker))))
+
+        var bestSeen: SearchNode?
+
+        searchLoop: while !heap.isEmpty, Date() < deadline {
+            guard let node = heap.popMin() else { break searchLoop }
+            worker.restore(node.snapshot)
+
+            if bestSeen == nil || node.value > bestSeen!.value {
+                bestSeen = node
+            }
+            if worker.isWon {
+                break searchLoop
+            }
+
+            for move in worker.legalMoves() {
+                worker.restore(node.snapshot)
+                guard worker.performMove(move, recordForUndo: false) else { continue }
+
+                let childPath = node.path + [move]
+                if worker.isWon {
+                    bestSeen = SearchNode(snapshot: worker.currentSnapshot(), path: childPath, value: .greatestFiniteMagnitude)
+                    break searchLoop
+                }
+
+                let key = worker.canonicalStateKey()
+                if visited.contains(key) { continue }
+                visited.insert(key)
+
+                let value = evaluator.value(for: BoardFeatures.extract(from: worker))
+                heap.insert(SearchNode(snapshot: worker.currentSnapshot(), path: childPath, value: value))
+            }
+        }
+
+        if let move = bestSeen?.path.first {
+            return move
+        }
+        // Only reachable with an unreasonably tight timeLimit that didn't
+        // leave time to expand even the root's children — fall back to
+        // plain greedy rather than returning nothing. worker may have
+        // been left at some descendant snapshot by the loop above, so
+        // restore it to the root position first.
+        worker.restore(snapshot)
+        return bestMove(rootMoves, in: worker)
     }
 
     /// Random-move probability during training, decaying as more games

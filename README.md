@@ -53,26 +53,6 @@ See `RULES.md` for the full, precise ruleset.
   counts as one move). Both can be pressed repeatedly. Undo history is
   cleared by starting a new game (new or replayed seed).
 
-## AI
-
-The "AI" row has a self-play reinforcement-learning agent:
-
-- **Train 200 games** runs 200 games of the AI playing itself in the
-  background (separate, disposable boards — it never touches the game
-  you're currently playing), learning after every move via TD(0) — it's a
-  linear value function over a handful of board features (foundation
-  progress, empty columns, longest movable run, etc.), not a neural
-  network, so it trains fast without any ML framework dependency. Press
-  it repeatedly to keep training; learned weights persist across app
-  launches (`UserDefaults`), and the win-rate counter accumulates.
-- **AI Move** applies the AI's current best move to *your* game, once,
-  using whatever it's learned so far (no further training from this).
-- Expect **modest** results, especially before much training — this is a
-  genuine but simple learner, not a solver. It should trend toward better
-  foundation progress with more training, but a linear evaluator likely
-  won't reliably win full games. See `Models/SolitaireAI.swift` for the
-  self-play loop and `Models/BoardEvaluator.swift` for the learning rule.
-
 ## Solver
 
 The "Solver" row is a **separate** tool from the AI: exact search for a
@@ -157,8 +137,20 @@ The "AI" row has a self-play reinforcement-learning agent:
   it repeatedly to keep training; learned weights (and the lifetime
   training count, shown alongside this session's win rate) persist across
   app launches (`UserDefaults`).
-- **AI Move** applies the AI's current best move to *your* game, once,
-  using whatever it's learned so far (no further training from this).
+- **AI Move** applies a move to *your* game, once, using whatever the AI
+  has learned so far — but not by just picking whichever single next move
+  looks best. That approach (still used internally during self-play,
+  where speed matters) turned out to be fundamentally too weak for this
+  game: real training data showed **zero self-play wins across the
+  entire training history**, even after 145 solved puzzles' worth of
+  supervised training had clearly taught the evaluator the right things
+  (foundation progress correctly valued positive, an occupied Reserve
+  correctly valued negative). A move that looks best one step ahead very
+  often dead-ends many moves later, and a policy that never looks further
+  than one step has no way to recover from that. So **AI Move** now runs
+  a bounded lookahead search guided by the evaluator (a few seconds at
+  most — the button shows "Thinking…" while it works) instead of a single
+  comparison, giving it a real chance to route around those traps.
 - **Train from Puzzles** trains from every puzzle the Solver has proven
   winnable (stored on disk, count shown next to the button) — supervised
   learning from real, known wins rather than self-play guesswork. Each
